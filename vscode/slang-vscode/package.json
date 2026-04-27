@@ -1,0 +1,53 @@
+{
+  "name": "slang-language",
+  "displayName": "SLANG Language Support",
+  "description": "Syntax highlighting and editor support for the S-OS SLANG language.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "slang",
+    "s-os",
+    "retro",
+    "8bit",
+    "syntax"
+  ],
+  "scripts": {
+    "package": "vsce package"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "slang",
+        "aliases": [
+          "SLANG",
+          "slang"
+        ],
+        "extensions": [
+          ".SL",
+          ".sl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "slang",
+        "scopeName": "source.slang",
+        "path": "./syntaxes/slang.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "slang",
+        "path": "./snippets/slang.json"
+      }
+    ]
+  }
+}

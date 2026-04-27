@@ -1,0 +1,17 @@
+# SLANG compiler outputs
+*.ASM
+*.LST
+*.SYM
+*.bin
+*.d88
+*.D88
+
+# Packaged VSCode extension artifacts
+*.vsix
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*~
+*.swp
+

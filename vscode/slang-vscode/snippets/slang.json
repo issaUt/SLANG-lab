@@ -1,0 +1,61 @@
+{
+  "MAIN block": {
+    "prefix": "main",
+    "body": [
+      "MAIN()",
+      "BEGIN",
+      "    $0",
+      "END;"
+    ],
+    "description": "Create MAIN() block"
+  },
+  "Function": {
+    "prefix": "func",
+    "body": [
+      "${1:NAME}(${2:ARGS})",
+      "BEGIN",
+      "    $0",
+      "END;"
+    ],
+    "description": "Create a SLANG function"
+  },
+  "Function with VAR": {
+    "prefix": "funcvar",
+    "body": [
+      "${1:NAME}(${2:ARGS})",
+      "VAR ${3:LOCAL};",
+      "BEGIN",
+      "    $0",
+      "END;"
+    ],
+    "description": "Create a SLANG function with VAR declaration"
+  },
+  "IF block": {
+    "prefix": "if",
+    "body": [
+      "IF (${1:COND}) {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create IF block"
+  },
+  "WHILE block": {
+    "prefix": "while",
+    "body": [
+      "WHILE (${1:COND}) {",
+      "    $0",
+      "}"
+    ],
+    "description": "Create WHILE block"
+  },
+  "ARRAY declaration": {
+    "prefix": "array",
+    "body": "ARRAY ${1:WORD} ${2:NAME}[${3:SIZE}];",
+    "description": "Declare ARRAY"
+  },
+  "VAR declaration": {
+    "prefix": "var",
+    "body": "VAR ${1:NAME};",
+    "description": "Declare VAR"
+  }
+}
