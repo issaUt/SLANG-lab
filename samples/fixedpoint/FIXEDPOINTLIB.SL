@@ -35,8 +35,10 @@ ARRAY BYTE ATAN_TBL[256] = {
 
 // 符号付き固定小数点同士を掛ける。小数部は 8bit、256 が 1.0。
 FIXMUL_S(A, B)
+VAR T;
 {
-    RETURN SDIV16(A .*. B, 256);
+    T = A .*. B;
+    RETURN T ./. 256;
 }
 
 
@@ -70,26 +72,10 @@ VAR SA, SB, UA, UB, I, F, Q;
 
 // 整数 X に固定小数点 F を掛ける。F は 256 が 1.0。
 FIXMUL_I(X, F)
+VAR T;
 {
-    RETURN SDIV16(X .*. F, 256);
-}
-
-
-// 符号付き 16bit 除算を行う。コンパイラに ./. がない環境向け。
-SDIV16(A, B)
-VAR Q, SA, SB;
-{
-    IF (B == 0) RETURN 0;
-
-    SA = 0;
-    SB = 0;
-    IF (A .<. 0) SA = 1;
-    IF (B .<. 0) SB = 1;
-
-    Q = ABS(A) / ABS(B);
-
-    IF (SA != SB) RETURN -Q;
-    RETURN Q;
+    T = X .*. F;
+    RETURN T ./. 256;
 }
 
 
@@ -155,35 +141,37 @@ VAR S, C;
 
 // 点 (X,Y) を A 度回転した後の X 座標を返す。
 ROTATE_X(X, Y, A)
-VAR C, S, T1, T2;
+VAR C, S, T1, T2, T;
 {
     C = COS_F(A);
     S = SIN_F(A);
 
     T1 = X .*. C;
     T2 = Y .*. S;
+    T = T1 - T2;
 
-    RETURN SDIV16(T1 - T2, 256);
+    RETURN T ./. 256;
 }
 
 
 // 点 (X,Y) を A 度回転した後の Y 座標を返す。
 ROTATE_Y(X, Y, A)
-VAR C, S, T1, T2;
+VAR C, S, T1, T2, T;
 {
     C = COS_F(A);
     S = SIN_F(A);
 
     T1 = X .*. S;
     T2 = Y .*. C;
+    T = T1 + T2;
 
-    RETURN SDIV16(T1 + T2, 256);
+    RETURN T ./. 256;
 }
 
 
 // 点 (X,Y) を中心 (CX,CY) のまわりに A 度回転し、結果を RP[0], RP[1] に入れる。
 ROTATE_CENTER(RP, X, Y, CX, CY, A)
-VAR RP[], DX, DY, C, S, T1, T2;
+VAR RP[], DX, DY, C, S, T1, T2, T;
 {
     DX = X - CX;
     DY = Y - CY;
@@ -193,11 +181,13 @@ VAR RP[], DX, DY, C, S, T1, T2;
 
     T1 = DX .*. C;
     T2 = DY .*. S;
-    RP[0] = CX + SDIV16(T1 - T2, 256);
+    T = T1 - T2;
+    RP[0] = CX + (T ./. 256);
 
     T1 = DX .*. S;
     T2 = DY .*. C;
-    RP[1] = CY + SDIV16(T1 + T2, 256);
+    T = T1 + T2;
+    RP[1] = CY + (T ./. 256);
 }
 
 
