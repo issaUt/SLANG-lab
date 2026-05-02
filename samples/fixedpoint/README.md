@@ -16,9 +16,12 @@ SLANG 向けの固定小数点ライブラリとデモです。
 - `FIXEDPOINT_GFXDEMO.SL`  
   `GRAPHF.LIB` / MAGIC の `@LINEC` を使うグラフィック回転デモです。サイズと角速度の異なる 5 つの長方形を描きます。
 
+- `FIXEDPOINT_WIREFRAMEDEMO.SL`
+  固定小数点の三角関数と乗算を使って、Pico 2 の `WireFrameTest` と同じ正八面体モデルをリアルタイムに回転描画する MAGIC/GRAPHF デモです。描画には単色版の `@LINE` を使います。
+
 ## MAGIC/GRAPHF デモについて
 
-`FIXEDPOINT_GFXDEMO.SL` は、MZ-2500 向けの MAGIC/GRAPHF 環境を前提にしています。
+`FIXEDPOINT_GFXDEMO.SL` と `FIXEDPOINT_WIREFRAMEDEMO.SL` は、MZ-2500 向けの MAGIC/GRAPHF 環境を前提にしています。
 
 このデモの動作確認には、現時点では未発表の MZ-2500 用 MAGIC ライブラリを使っています。そのため、公開済みの SLANG クロスコンパイラ一式だけでは、そのままビルド・実行できない場合があります。
 

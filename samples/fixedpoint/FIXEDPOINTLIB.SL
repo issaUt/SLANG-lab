@@ -33,12 +33,23 @@ ARRAY BYTE ATAN_TBL[256] = {
 };
 
 
+// 符号付き固定小数点の小数部 8bit を落とす。0 方向へ丸めるため、負数は補正する。
+FIXSHIFT8_S(T)
+{
+    IF (T .<. 0) {
+        T = T + 255;
+    }
+
+    RETURN T .>>. 8;
+}
+
+
 // 符号付き固定小数点同士を掛ける。小数部は 8bit、256 が 1.0。
 FIXMUL_S(A, B)
 VAR T;
 {
     T = A .*. B;
-    RETURN T ./. 256;
+    RETURN FIXSHIFT8_S(T);
 }
 
 
@@ -75,7 +86,7 @@ FIXMUL_I(X, F)
 VAR T;
 {
     T = X .*. F;
-    RETURN T ./. 256;
+    RETURN FIXSHIFT8_S(T);
 }
 
 
@@ -150,7 +161,7 @@ VAR C, S, T1, T2, T;
     T2 = Y .*. S;
     T = T1 - T2;
 
-    RETURN T ./. 256;
+    RETURN FIXSHIFT8_S(T);
 }
 
 
@@ -165,7 +176,7 @@ VAR C, S, T1, T2, T;
     T2 = Y .*. C;
     T = T1 + T2;
 
-    RETURN T ./. 256;
+    RETURN FIXSHIFT8_S(T);
 }
 
 
@@ -182,12 +193,12 @@ VAR RP[], DX, DY, C, S, T1, T2, T;
     T1 = DX .*. C;
     T2 = DY .*. S;
     T = T1 - T2;
-    RP[0] = CX + (T ./. 256);
+    RP[0] = CX + FIXSHIFT8_S(T);
 
     T1 = DX .*. S;
     T2 = DY .*. C;
     T = T1 + T2;
-    RP[1] = CY + (T ./. 256);
+    RP[1] = CY + FIXSHIFT8_S(T);
 }
 
 
