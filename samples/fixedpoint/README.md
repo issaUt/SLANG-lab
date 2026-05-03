@@ -19,9 +19,12 @@ SLANG 向けの固定小数点ライブラリとデモです。
 - `FIXEDPOINT_WIREFRAMEDEMO.SL`
   固定小数点の三角関数と乗算を使って、Pico 2 の `WireFrameTest` と同じ正八面体モデルをリアルタイムに回転描画する MAGIC/GRAPHF デモです。描画には単色版の `@LINE` を使います。
 
+- `FIXEDPOINT_MAGIC3DDEMO.SL`
+  同じ正八面体モデルを、MAGIC ライブラリ内蔵の 3D 変換・ワイヤーフレーム描画機能で表示する比較用デモです。
+
 ## MAGIC/GRAPHF デモについて
 
-`FIXEDPOINT_GFXDEMO.SL` と `FIXEDPOINT_WIREFRAMEDEMO.SL` は、MZ-2500 向けの MAGIC/GRAPHF 環境を前提にしています。
+`FIXEDPOINT_GFXDEMO.SL`、`FIXEDPOINT_WIREFRAMEDEMO.SL`、`FIXEDPOINT_MAGIC3DDEMO.SL` は、MZ-2500 向けの MAGIC/GRAPHF 環境を前提にしています。
 
 このデモの動作確認には、現時点では未発表の MZ-2500 用 MAGIC ライブラリを使っています。そのため、公開済みの SLANG クロスコンパイラ一式だけでは、そのままビルド・実行できない場合があります。
 
