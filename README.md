@@ -9,8 +9,11 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 - `docs/`
   自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順を記録しています。
 
-- `samples/`
-  SLANG の実用サンプル。機種依存や必要ライブラリがある場合は各サンプル配下の README に記載します。
+- `examples/`
+  SLANG の実用サンプル。機種依存や必要ライブラリがある場合は README やソース内コメントに記載します。
+
+- `lib/`
+  サンプルから共通利用する SLANG ライブラリやアセンブラ include ファイル。
 
 - `vscode/`
   VSCode 用の構文定義、スニペット、拡張パッケージ作成用ファイル。
@@ -54,21 +57,11 @@ VSCode で `.LIB` を SLANG として開きたい場合は、ワークスペー�
 }
 ```
 
-## 現在のサンプル
-
-- `samples/fixedpoint/`
-  16bit 符号付き固定小数点の三角関数、回転、移動、`atan2` のサンプルです。テキスト画面デモと MAGIC/GRAPHF を使うグラフィックデモを含みます。
-
-- `samples/hat/`
-  MAGIC/GRAPHF を使ったグラフィックサンプルです。
-
 ## MAGIC/GRAPHF サンプルについて
 
-`FIXEDPOINT_GFXDEMO.SL` や `samples/hat/HAT3D.SL` は、MZ-2500 向けの MAGIC/GRAPHF 環境を前提にしています。
+MAGIC/GRAPHF を使うサンプルは、MZ-2500 用 MAGIC ライブラリを公開できる段階で `examples/` 以下へ整理して追加する予定です。
 
-特に MZ-2500 用の MAGIC ライブラリは、現時点では未発表のローカル実装を使って動作確認しています。そのため、公開済みの SLANG クロスコンパイラ一式だけでは、そのままビルド・実行できない場合があります。
-
-MAGIC/GRAPHF を使わないサンプルは、各ファイルや各 README の説明に従ってください。
+現在の `examples/` は、主に IOCS 版と固定小数点ライブラリのサンプルを置いています。
 
 ## コミット方針
 
