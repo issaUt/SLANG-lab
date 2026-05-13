@@ -25,7 +25,7 @@ ARRAY BYTE MODEL_WIRE[11][1] = [
 
 
 // 短い待ち時間を作る。
-DELAY(N)
+DELAY(WORD N)
 VAR I, J;
 {
     I = 0;
@@ -60,7 +60,7 @@ INIT_MODEL()
 
 
 // MAGIC の 3D パラメータを設定する。
-SET_MAGIC_3D(HEAD, PITCH, BANK)
+SET_MAGIC_3D(WORD HEAD, WORD PITCH, WORD BANK)
 {
     _PAR[0] = 0;
     _PAR[1] = 0;

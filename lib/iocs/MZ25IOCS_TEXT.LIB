@@ -1,0 +1,73 @@
+#ASM
+include "../../lib/iocs/iocs_mz2500.inc"
+#END
+
+// 文字列を表示する。
+// S は 0 終端文字列を指す BYTE 間接変数。
+IOCS_CRTMS(BYTE S[])
+{
+    ^DE = S;
+    #ASM
+    LD   DE,(_DE)
+    SVC  SVC_CRTMS
+    #END
+}
+
+
+// 8x8ドットPCGパターンを定義する。
+// CH: 1バイト文字コード。BASIC の DEF CHR$(64) なら $40 を指定する。
+// SEL: PCGセレクト番号。IOCS仕様では 0..3。
+// DATA: 1文字分の24バイトデータ。B面8バイト、R面8バイト、G面8バイトの順。
+// SPCG はパターンを DIRARE($1000-) から読むため、先に MEM[$1000+I] へコピーする。
+// 8x16ドットPCGは文字コードが $0100..$01FE になるため、別関数として扱う予定。
+IOCS_SPCG8(BYTE CH, BYTE SEL, BYTE DATA[])
+VAR BYTE I;
+{
+    FOR I = 0 TO 23 {
+        MEM[$1000 + I] = DATA[I];
+    }
+
+    ^DE = CH;
+    ^A = SEL;
+    #ASM
+    LD  DE,(_DE)
+    LD  A,(_A)
+    LD  B,A
+    SVC SVC_SPCG
+    #END
+}
+
+IOCS_LOCATE(BYTE X, BYTE Y)
+VAR WORD XY;
+{
+    XY = Y << 8;
+    XY = XY OR X;
+    ^HL = XY;
+
+    #ASM
+    LD HL,(_HL)
+    SVC SVC_CMOV
+    #END
+}
+
+IOCS_GETCURSOR(BYTE POS[])
+VAR BYTE BUF[];
+{
+    BUF = $05E2;
+    POS[0] = BUF[0];
+    POS[1] = BUF[1];
+}
+
+/*
+// PCGデータ定義例。
+// BASIC の hexchr$("8DAD...") は、2桁ずつ BYTE 配列に展開して持つ。
+// 文字列ではなく BYTE 配列にすることで、$00 を含むパターンも安全に扱える。
+VAR BYTE PCG_64[24] = {
+    $8D,$AD,$AD,$AD,$AD,$AD,$AD,$AD,    // B plane
+    $00,$00,$04,$0C,$0C,$0C,$0C,$08,    // R plane
+    $00,$01,$81,$84,$8D,$0D,$8D,$88     // G plane
+};
+
+// 使用例:
+// IOCS_SPCG8($40, 0, PCG_64);
+*/

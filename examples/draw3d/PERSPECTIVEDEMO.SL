@@ -3,10 +3,8 @@
  * 共通視点がモデルの周囲を回る、Z距離スケーリング付きの簡易透視投影を試す。
  */
 
-CONST  _PLOTSW=0,_THREE=0,_FLOAT=0,_SINCOS=0,_TILESW=1,_GHIN=$FFFF,_KPRINTF=0,_COLOR=1;
-
-#INCLUDE GRAPHF.LIB
-#include "FIXEDPOINTLIB.SL"
+#include "../../lib/fixedpoint/FIXEDPOINT.LIB"
+#include "../../lib/iocs/MZ25IOCS_GFX.LIB"
 
 VAR PROJ_X, PROJ_Y, PROJ_OK;
 VAR VIEW_AY, VIEW_AX, VIEW_DIST, VIEW_NEAR, VIEW_FOCAL;
@@ -21,6 +19,8 @@ VAR BYTE CUR_EA[], BYTE CUR_EB[];
 VAR CUR_OX[], CUR_OY[];
 VAR BYTE CUR_OOK[];
 VAR CUR_VMAX, CUR_EMAX, CUR_MX, CUR_MY, CUR_MZ;
+VAR BYTE DRAW_COLOR;
+VAR BYTE DRAW_PAGE, SHOW_PAGE;
 
 // WORD配列の初期値に負数を含めるとバイト列として出力されるため、
 // 座標は INIT_*_DATA() で実行時に設定する。
@@ -48,15 +48,24 @@ VAR I, J;
 }
 
 
-// グラフィック画面を消去する。
-GCLS()
+// IOCSグラフィック画面を初期化する。
+INIT_GFX()
 {
-    @MODE(2, 2);
-    @CLS();
-    @MODE(2, 1);
-    @CLS();
-    @MODE(2, 0);
-    @CLS();
+    IOCS_INITSCREEN();
+    IOCS_SCREEN(0, 0);
+    IOCS_GINIT(640, 200, 16);
+    IOCS_VIEW(0, 0, 639, 199);
+    IOCS_CLS(0);
+    IOCS_SCREEN(1, 1);
+    IOCS_CLS(0);
+    IOCS_SCREEN(0, 0);
+}
+
+
+// 現在の色で線を引く。
+DRAW_LINE(WORD X1, WORD Y1, WORD X2, WORD Y2)
+{
+    IOCS_LINE(X1, Y1, X2, Y2, DRAW_COLOR);
 }
 
 
@@ -248,7 +257,7 @@ VAR X1, Y1, X2, Y2;
             Y1 = SY[A];
             X2 = SX[B];
             Y2 = SY[B];
-            @LINE(X1, Y1, X2, Y2);
+            DRAW_LINE(X1, Y1, X2, Y2);
         }
     }
 }
@@ -264,7 +273,7 @@ VAR X1, Y1, X2, Y2;
             Y1 = CUR_OY[A];
             X2 = CUR_OX[B];
             Y2 = CUR_OY[B];
-            @LINE(X1, Y1, X2, Y2);
+            DRAW_LINE(X1, Y1, X2, Y2);
         }
     }
 }
@@ -310,7 +319,7 @@ VAR I;
 ERASE_FRAME(BYTE FIRST)
 {
     IF (FIRST == 0) {
-        @MODE(0, 0);
+        DRAW_COLOR = 0;
         DRAW_OLD_MODEL();
     }
 }
@@ -321,26 +330,38 @@ DRAW_FRAME(WORD MAY, WORD MAX)
 {
     MAKE_MODEL(MAY, MAX);
 
-    @MODE(2, 0);
+    DRAW_COLOR = 15;
     DRAW_MODEL();
     SAVE_MODEL();
 }
 
 
+// 次の描画ページへ切り替える。
+SWAP_PAGE()
+{
+    IF (DRAW_PAGE == 0) {
+        DRAW_PAGE = 1;
+        SHOW_PAGE = 0;
+    } ELSE {
+        DRAW_PAGE = 0;
+        SHOW_PAGE = 1;
+    }
+}
+
+
 MAIN()
-VAR AY, AX, KEY, FIRST;
+VAR AY, AX, KEY;
 BEGIN
     PRINT(" FIXED POINT PERSPECTIVE DEMO\n ");
-    @INIT();
-    @PALET(0,7,2,3,4,5,6,7);
-    GCLS();
+    INIT_GFX();
     INIT_VIEW();
     INIT_OCTA_DATA(35);
     INIT_CUBE_DATA(28);
 
     AY = 0;
     KEY = 0;
-    FIRST = 1;
+    DRAW_PAGE = 0;
+    SHOW_PAGE = 1;
 
     WHILE (KEY != 27) {
         KEY = INKEY(0);
@@ -348,11 +369,8 @@ BEGIN
         SET_CAMERA_ANGLE(AY);
         VIEW_AX = -12;
 
-        SET_OCTA_MODEL();
-        ERASE_FRAME(FIRST);
-
-        SET_CUBE_MODEL();
-        ERASE_FRAME(FIRST);
+        IOCS_SCREEN(DRAW_PAGE, SHOW_PAGE);
+        IOCS_CLS(0);
 
         SET_OCTA_MODEL();
         DRAW_FRAME(0, AX);
@@ -360,13 +378,13 @@ BEGIN
         SET_CUBE_MODEL();
         DRAW_FRAME(0, AX);
 
-        FIRST = 0;
+        IOCS_SCREEN(DRAW_PAGE, DRAW_PAGE);
+        SWAP_PAGE();
 
-        DELAY(5);
+        //DELAY(5);
         AY = NORMALIZE360(AY + 4);
     }
 
-    GCLS();
     PRINT("\C");
     PRINT("DONE\n");
 END;

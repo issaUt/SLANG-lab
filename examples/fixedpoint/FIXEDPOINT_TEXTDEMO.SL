@@ -1,4 +1,4 @@
-#include "FIXEDPOINTLIB.SL"
+#include "../../lib/fixedpoint/FIXEDPOINT.LIB"
 
 ARRAY ROT_RESULT[1];
 VAR ROT_PTR[];

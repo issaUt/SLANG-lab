@@ -32,7 +32,7 @@ ARRAY BYTE CUBE_EB[11] = [ 1, 2, 3, 0, 5, 6, 7, 4, 4, 5, 6, 7 ];
 
 
 // 短い待ち時間を作る。
-DELAY(N)
+DELAY(WORD N)
 VAR I, J;
 {
     I = 0;
@@ -59,7 +59,7 @@ GCLS()
 
 
 // 正八面体モデルの頂点座標をWORD配列へ設定する。
-INIT_OCTA_DATA(S)
+INIT_OCTA_DATA(WORD S)
 VAR M;
 {
     M = -S;
@@ -74,7 +74,7 @@ VAR M;
 
 
 // 立方体モデルの頂点座標をWORD配列へ設定する。
-INIT_CUBE_DATA(S)
+INIT_CUBE_DATA(WORD S)
 VAR M;
 {
     M = -S;
@@ -125,7 +125,7 @@ SET_CUBE_MODEL()
 
 
 // 3D 点 (X,Y,Z) を Y 軸、X 軸の順に回転し、画面座標 PROJ_X/PROJ_Y に入れる。
-PROJECT_POINT(X, Y, Z, AY, AX)
+PROJECT_POINT(WORD X, WORD Y, WORD Z, WORD AY, WORD AX)
 VAR CY, SY, CX, SX, RX, RY, RZ;
 {
     CY = COS_F(AY);
@@ -144,7 +144,7 @@ VAR CY, SY, CX, SX, RX, RY, RZ;
 
 
 // 頂点 I の 3D 座標を回転して、現在フレームの画面座標配列へ入れる。
-SET_POINT(I, X, Y, Z, AY, AX)
+SET_POINT(WORD I, WORD X, WORD Y, WORD Z, WORD AY, WORD AX)
 {
     PROJECT_POINT(X, Y, Z, AY, AX);
     SX[I] = PROJ_X;
@@ -153,7 +153,7 @@ SET_POINT(I, X, Y, Z, AY, AX)
 
 
 // 登録済みモデルの頂点配列を画面座標へ変換する。
-MAKE_MODEL(AY, AX)
+MAKE_MODEL(WORD AY, WORD AX)
 VAR I, X, Y, Z;
 {
     FOR I = 0 TO CUR_VMAX {
@@ -166,7 +166,7 @@ VAR I, X, Y, Z;
 
 
 // 現在フレームの頂点 A-B を描く。
-DRAW_EDGE(A, B)
+DRAW_EDGE(BYTE A, BYTE B)
 VAR X1, Y1, X2, Y2;
 {
     X1 = SX[A];
@@ -178,7 +178,7 @@ VAR X1, Y1, X2, Y2;
 
 
 // 前フレームの頂点 A-B を描く。消去モードで呼び出す。
-DRAW_OLD_EDGE(A, B)
+DRAW_OLD_EDGE(BYTE A, BYTE B)
 VAR X1, Y1, X2, Y2;
 {
     X1 = CUR_OX[A];
@@ -225,7 +225,7 @@ VAR I;
 
 
 // 登録済みモデルの前フレームを消す。
-ERASE_FRAME(FIRST)
+ERASE_FRAME(BYTE FIRST)
 {
     IF (FIRST == 0) {
         @MODE(0, 0);
@@ -235,7 +235,7 @@ ERASE_FRAME(FIRST)
 
 
 // 登録済みモデルを 1 フレーム分回転・描画し、次回消去用に保存する。
-DRAW_FRAME(AY, AX)
+DRAW_FRAME(WORD AY, WORD AX)
 {
     MAKE_MODEL(AY, AX);
 
@@ -251,8 +251,8 @@ BEGIN
     PRINT(" FIXED POINT WIREFRAME DEMO\n ");
     @INIT();
     GCLS();
-    INIT_OCTA_DATA(95);
-    INIT_CUBE_DATA(80);
+    INIT_OCTA_DATA(55);   // 95
+    INIT_CUBE_DATA(40);   // 80
 
     AY = 0;
     KEY = 0;

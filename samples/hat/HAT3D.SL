@@ -35,11 +35,11 @@ BEGIN
 
             R = FSQRT(FX*FX + FY*FY) * DEG2RAD;
             Z = 100.0 * FCOS(R) - 30.0 * FCOS(3.0 * R) + 1.0;
-      
+
             DX = FTOI((116.0 + FX/2.0 + (16.0 - FY/2.0)/2.0 + 12.0) * 1.8);
             SX = DX + 80;
             SY = FTOI(((130.0 - FY/2.0 - Z)/2.0) * 0.9 + 25.0);
-           
+
             IF D[0][DX]==65535 {
                 D[0][DX]=SY;
                 D[1][DX]=SY;
@@ -63,9 +63,8 @@ BEGIN
 END;
 
 
-PLOT_POINT(SX,SY,Z)
-VAR FLOAT Z;
-VAR SX,SY,C;
+PLOT_POINT(WORD SX, WORD SY, FLOAT Z)
+VAR C;
 BEGIN
     C = FTOI((Z + 96.0) / 30.0) + 1;
 
@@ -74,7 +73,7 @@ BEGIN
 
     // @CIRCLEC(SX,SY,1,4);
     // PRINT("X,Y=");PRINT(SX);PRINT(", ");PRINT(SY);
-    // PRINT(", ");PRINT(C);PRINT("\n");    
+    // PRINT(", ");PRINT(C);PRINT("\n");
     @LINEC(SX,SY,SX,SY,C);
 
 END;
