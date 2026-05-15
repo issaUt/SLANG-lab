@@ -1,5 +1,5 @@
 
-#include "../../lib/iocs/MZ25IOCS_TEXT.LIB"
+#include "../../lib/iocs/MZ25IOCS_SVC.LIB"
 
 MAIN()
 VAR BYTE BUF[];

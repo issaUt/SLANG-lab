@@ -4,7 +4,7 @@
  演算はSLANGのFLOATを使い、描画はMAGICではなくMZ-2500 IOCSを直接呼ぶ。
  */
 
-#include "../../lib/iocs/MZ25IOCS_GFX.LIB"
+#include "../../lib/iocs/MZ25IOCS_SVC.LIB"
 
 CONST DEG2RAD = 3.1415926 / 180.0;
 

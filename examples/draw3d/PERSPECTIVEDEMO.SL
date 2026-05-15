@@ -4,7 +4,7 @@
  */
 
 #include "../../lib/fixedpoint/FIXEDPOINT.LIB"
-#include "../../lib/iocs/MZ25IOCS_GFX.LIB"
+#include "../../lib/iocs/MZ25IOCS_SVC.LIB"
 
 VAR PROJ_X, PROJ_Y, PROJ_OK;
 VAR VIEW_AY, VIEW_AX, VIEW_DIST, VIEW_NEAR, VIEW_FOCAL;

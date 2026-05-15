@@ -21,7 +21,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## ライブラリ配置
 
 - `lib/iocs/`
-  MZ-2500 IOCS 向けの試作ライブラリです。`MZ25IOCS_TEXT.LIB` はテキスト/PCG 周り、`MZ25IOCS_GFX.LIB` はグラフィック周り、`MZ25IOCS_FNC.LIB` は数値変換/浮動小数点周りを置いています。内部で `iocs_mz2500*.inc` をアセンブラ include します。
+  MZ-2500 IOCS 向けの試作ライブラリです。`MZ25IOCS_SVC.LIB` は画面初期化、グラフィック、テキスト/PCG など SVC 系コール、`MZ25IOCS_FNC.LIB` は数値変換/浮動小数点など FNC 系コールを置いています。内部で `iocs_mz2500_svc.inc`、`iocs_mz2500_fnc.inc` をアセンブラ include します。
 
 - `lib/fixedpoint/`
   16bit 符号付き固定小数点ライブラリです。2D/3D の回転、三角関数、簡易 `atan2` などを含みます。
@@ -44,7 +44,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 
 このリポジトリ内のサンプルは、基本的に各 `examples/*/` ディレクトリでビルドする前提で、`../../lib/...` を直接 `#include` しています。
 
-`MZ25IOCS_*.LIB` 内の `iocs_mz2500.inc` は AILZ80ASM 側の `include` です。SLANG コンパイラの `-I` はこのアセンブラ include パスには渡らないため、ファイル配置を変えた場合は `MZ25IOCS_*.LIB` 内の include パスも合わせて変更してください。
+`MZ25IOCS_*.LIB` 内の `iocs_mz2500_svc.inc`、`iocs_mz2500_fnc.inc` は AILZ80ASM 側の `include` です。SLANG コンパイラの `-I` はこのアセンブラ include パスには渡らないため、ファイル配置を変えた場合は `MZ25IOCS_*.LIB` 内の include パスも合わせて変更してください。
 
 VSCode で `.LIB` を SLANG として開きたい場合は、ワークスペースの `.vscode/settings.json` に次のように追加できます。
 

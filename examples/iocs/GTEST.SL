@@ -1,4 +1,4 @@
-#include "../../lib/iocs/MZ25IOCS_GFX.LIB"
+#include "../../lib/iocs/MZ25IOCS_SVC.LIB"
 
 MAIN()
 VAR BYTE S[];
