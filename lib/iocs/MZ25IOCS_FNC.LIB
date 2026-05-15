@@ -1,0 +1,576 @@
+#ASM
+include "../../lib/iocs/iocs_mz2500_fnc.inc"
+#END
+
+CONST IOCS_FN_INT=0, IOCS_FN_ABS=1, IOCS_FN_SIN=2, IOCS_FN_COS=3, IOCS_FN_TAN=4;
+CONST IOCS_FN_LN=5, IOCS_FN_EXP=6, IOCS_FN_SQR=7, IOCS_FN_RND=8;
+CONST IOCS_FN_ATN=10, IOCS_FN_SGN=11, IOCS_FN_LOG=12, IOCS_FN_FRAC=13;
+CONST IOCS_FN_PAI=14, IOCS_FN_RAD=15, IOCS_FN_FAC=16, IOCS_FN_DEG=17, IOCS_FN_FIX=18;
+CONST IOCS_FN_ADD=32, IOCS_FN_SUB=33, IOCS_FN_MUL=34, IOCS_FN_DIV=35;
+CONST IOCS_FN_CMP=36, IOCS_FN_MOD=37, IOCS_FN_YEN=38, IOCS_FN_POWER=39;
+CONST IOCS_FN_NEG=40, IOCS_FN_RNDMIZ=41, IOCS_FN_INT0=42, IOCS_FN_INT2=43, IOCS_FN_FLT0=44;
+
+// MZ-2500 IOCS 浮動小数点形式と SLANG FLOAT の相互変換。
+//
+// SLANG FLOAT は 3バイトで、BYTE 配列として見ると以下の順になる。
+//   SF[0] = 仮数下位
+//   SF[1] = 仮数上位
+//   SF[2] = 符号 + 指数 7bit。指数 bias は 63。
+//
+// MZ-2500 IOCS 単精度は 4バイト。
+//   MZF[0] = 指数 8bit。指数 bias は 129。
+//   MZF[1] = 符号 + 仮数上位 7bit
+//   MZF[2] = 仮数
+//   MZF[3] = 仮数
+//
+// MZ-2500 IOCS 倍精度は 8バイト。
+//   MZD[0] = 指数 8bit。指数 bias は 129。
+//   MZD[1] = 符号 + 仮数上位 7bit
+//   MZD[2]..MZD[7] = 仮数
+//
+// ここでは処理を軽くするため、精度縮小時は丸めず切り捨てる。
+
+// SLANG FLOAT 3バイト領域を 0 にする。
+IOCS_CLEAR_SF(BYTE SF[])
+{
+    SF[0] = 0;
+    SF[1] = 0;
+    SF[2] = 0;
+}
+
+// MZ単精度 4バイト領域を 0 にする。
+IOCS_CLEAR_MZF(BYTE MZF[])
+VAR BYTE I;
+{
+    FOR I = 0 TO 3 {
+        MZF[I] = 0;
+    }
+}
+
+// MZ倍精度 8バイト領域を 0 にする。
+IOCS_CLEAR_MZD(BYTE MZD[])
+VAR BYTE I;
+{
+    FOR I = 0 TO 7 {
+        MZD[I] = 0;
+    }
+}
+
+// SLANG FLOAT を MZ単精度へ変換する。
+// SF は SLANG FLOAT の3バイト領域、MZF は出力先4バイト領域。
+IOCS_SF2MZF(BYTE SF[], BYTE MZF[])
+VAR BYTE EXP;
+{
+    EXP = SF[2] AND 127;
+    IF (EXP == 0) {
+        IOCS_CLEAR_MZF(MZF);
+        RETURN;
+    }
+
+    MZF[0] = EXP + 66;
+    MZF[1] = (SF[2] AND 128) OR (SF[1] >> 1);
+    MZF[2] = ((SF[1] AND 1) << 7) OR (SF[0] >> 1);
+    MZF[3] = (SF[0] AND 1) << 7;
+}
+
+// SLANG FLOAT を MZ倍精度へ変換する。
+// 足りない仮数下位は 0 で埋める。
+IOCS_SF2MZD(BYTE SF[], BYTE MZD[])
+{
+    IOCS_SF2MZF(SF, MZD);
+    MZD[4] = 0;
+    MZD[5] = 0;
+    MZD[6] = 0;
+    MZD[7] = 0;
+}
+
+// MZ単精度を SLANG FLOAT へ変換する。
+// MZ側の指数がSLANGの表現範囲を超える場合は最大値に飽和する。
+// MZ側の指数が小さすぎる場合は 0 にする。
+IOCS_MZF2SF(BYTE MZF[], BYTE SF[])
+VAR WORD EXP;
+VAR BYTE SIGN;
+{
+    IF (MZF[0] == 0) {
+        IOCS_CLEAR_SF(SF);
+        RETURN;
+    }
+
+    SIGN = MZF[1] AND 128;
+    EXP = MZF[0];
+
+    IF (EXP < 66) {
+        IOCS_CLEAR_SF(SF);
+        RETURN;
+    }
+
+    IF (EXP > 193) {
+        SF[0] = 255;
+        SF[1] = 255;
+        SF[2] = SIGN OR 127;
+        RETURN;
+    }
+
+    SF[2] = SIGN OR (EXP - 66);
+    SF[1] = ((MZF[1] AND 127) << 1) OR (MZF[2] >> 7);
+    SF[0] = ((MZF[2] AND 127) << 1) OR (MZF[3] >> 7);
+}
+
+// MZ倍精度を SLANG FLOAT へ変換する。
+// 倍精度の仮数下位は切り捨てる。
+IOCS_MZD2SF(BYTE MZD[], BYTE SF[])
+{
+    IOCS_MZF2SF(MZD, SF);
+}
+
+// MZ単精度を MZ倍精度へ変換する。
+// 足りない仮数下位は 0 で埋める。
+IOCS_MZF2MZD(BYTE MZF[], BYTE MZD[])
+VAR BYTE I;
+{
+    FOR I = 0 TO 3 {
+        MZD[I] = MZF[I];
+    }
+    MZD[4] = 0;
+    MZD[5] = 0;
+    MZD[6] = 0;
+    MZD[7] = 0;
+}
+
+// MZ倍精度を MZ単精度へ変換する。
+// 精度縮小時は丸めず、先頭4バイトをそのまま使う。
+IOCS_MZD2MZF(BYTE MZD[], BYTE MZF[])
+VAR BYTE I;
+{
+    FOR I = 0 TO 3 {
+        MZF[I] = MZD[I];
+    }
+}
+
+// IOCS の文字列数値変換 FNC_C_FLAS を呼び出す。
+// S は 0 終端の数値文字列、OUT は変換結果の出力先。
+// OM[0] に IOCS が返した型番号を保存する。
+// 型番号は 2:整数、5:単精度浮動小数点、8:倍精度浮動小数点。
+// IOCS内部では E/e 指数表記が 5、D/d 指数表記と # 接尾辞が 8 になる。
+IOCS_C_FLAS(BYTE S[], BYTE OUT[], BYTE OM[])
+{
+    ^DE = S;
+    ^HL = OUT;
+
+    #ASM
+    LD  DE,(_DE)
+    LD  HL,(_HL)
+    FNC FNC_C_FLAS
+    LD  A, B
+    LD  (_A),A
+    #END
+
+    OM[0] = ^A;
+}
+
+// IOCS の文字列数値変換 FNC_C_FXAS を呼び出す。型指定あり。
+// S は 0 終端の数値文字列、OUT は変換結果の出力先。
+// M は B レジスタへ渡す型番号。
+// 型番号は 2:整数、5:単精度浮動小数点、8:倍精度浮動小数点。
+// 逆アセンブル上、単精度入口では B=5、倍精度入口では B=8 が使われている。
+IOCS_C_FXAS(BYTE S[], BYTE OUT[], BYTE M)
+{
+    ^DE = S;
+    ^HL = OUT;
+    ^A  = M;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  DE,(_DE)
+    LD  HL,(_HL)
+    FNC FNC_C_FXAS
+    #END
+}
+
+// IOCS の浮動小数点バイナリから文字列への変換 FNC_C_NMFL を呼び出す。型指定あり。
+// S は浮動小数点バイナリが保存されているアドレス。
+// OUT は 0 終端の数値文字列出力先アドレス。
+// M は B レジスタへ渡す型番号。
+// 型番号は 2:整数、5:単精度浮動小数点、8:倍精度浮動小数点。
+// IOCS内部では B=2 を整数、それ以外を浮動小数点として扱い、BIT 3,B で倍精度を判定する。
+// IOCS は変換結果を内部バッファに作り、DE にその文字列アドレスを返す。
+// そのため、呼び出し側の OUT へ 0 終端までコピーして返す。
+IOCS_C_NMFL(BYTE S[], BYTE OUT[], BYTE M)
+{
+    ^HL = S;
+    ^BC = OUT;
+    ^A  = M;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  HL,(_HL)
+    FNC FNC_C_NMFL
+    LD  BC,(_BC)
+IOCS_C_NMFL_COPY:
+    LD  A,(DE)
+    LD  (BC),A
+    INC DE
+    INC BC
+    OR  A
+    JR  NZ,IOCS_C_NMFL_COPY
+    #END
+}
+
+// IOCS の浮動小数点バイナリから文字列への変換 FNC_C_ASFL を呼び出す。型指定あり。
+// S は浮動小数点バイナリが保存されているアドレス。
+// OUT は 0 終端の数値文字列出力先アドレス。
+// M は B レジスタへ渡す型番号。
+// 型番号は 2:整数、5:単精度浮動小数点、8:倍精度浮動小数点。
+// IOCS内部では B=2 を整数、それ以外を浮動小数点として扱い、BIT 3,B で倍精度を判定する。
+// IOCS は変換結果を内部バッファに作り、DE にその文字列アドレスを返す。
+// そのため、呼び出し側の OUT へ 0 終端までコピーして返す。
+IOCS_C_ASFL(BYTE S[], BYTE OUT[], BYTE M)
+{
+    ^HL = S;
+    ^BC = OUT;
+    ^A  = M;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  HL,(_HL)
+    FNC FNC_C_ASFL
+    LD  BC,(_BC)
+IOCS_C_ASFL_COPY:
+    LD  A,(DE)
+    LD  (BC),A
+    INC DE
+    INC BC
+    OR  A
+    JR  NZ,IOCS_C_ASFL_COPY
+    #END
+}
+
+// IOCS の USING 書式変換 FNC_USING を呼び出す。型指定あり。
+// S は浮動小数点バイナリが保存されているアドレス。
+// FMT は 0 終端の書式文字列。
+// OUT は 0 終端の数値文字列出力先アドレス。
+// M は A レジスタへ渡す型番号。
+// 型番号は 2:整数、5:単精度浮動小数点、8:倍精度浮動小数点。
+// IOCS内部では $05A2 を書式文字列ポインタ、$05A0 を書式先頭ポインタとして参照する。
+IOCS_F_USING(BYTE S[], BYTE FMT[], BYTE OUT[], BYTE M)
+{
+    ^DE = S;
+    ^HL = FMT;
+    ^BC = OUT;
+    ^A  = M;
+
+    #ASM
+    LD  HL,(_HL)
+    LD  ($05A0),HL
+    LD  ($05A2),HL
+    LD  A,(_A)
+    LD  DE,(_DE)
+    LD  BC,(_BC)
+    FNC FNC_USING
+    #END
+}
+
+
+// IOCS FNC の二項浮動小数点演算を呼び出す。
+// L は左辺兼結果保存先、R は右辺。
+// M は型指定。2:整数、5:単精度浮動小数点、8:倍精度浮動小数点。
+// FN は FNC 番号。実行時に RST 28H 直後の1バイトを書き換えて呼び出す。
+// IOCSの二項演算は HL に左辺、DE に右辺のアドレスを渡し、結果を HL 側へ保存する。
+IOCS_F_CALL2(BYTE L[], BYTE R[], BYTE M, BYTE FN)
+{
+    ^HL = L;
+    ^DE = R;
+    ^A  = M;
+    ^BC = FN;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  HL,(_BC)
+    LD  A,L
+    LD  (IOCS_F_CALL2_NO),A
+    LD  HL,(_HL)
+    LD  DE,(_DE)
+    RST 28H
+IOCS_F_CALL2_NO:
+    DB  00H
+    #END
+}
+
+// L = L + R を計算する。
+IOCS_F_ADD(BYTE L[], BYTE R[], BYTE M)
+{
+    IOCS_F_CALL2(L, R, M, IOCS_FN_ADD);
+}
+
+// L = L - R を計算する。
+IOCS_F_SUB(BYTE L[], BYTE R[], BYTE M)
+{
+    IOCS_F_CALL2(L, R, M, IOCS_FN_SUB);
+}
+
+// L = L * R を計算する。
+IOCS_F_MUL(BYTE L[], BYTE R[], BYTE M)
+{
+    IOCS_F_CALL2(L, R, M, IOCS_FN_MUL);
+}
+
+// L = L / R を計算する。
+IOCS_F_DIV(BYTE L[], BYTE R[], BYTE M)
+{
+    IOCS_F_CALL2(L, R, M, IOCS_FN_DIV);
+}
+
+// L と R を比較する。
+// 戻り値は暫定で、L<R のとき -1、L==R のとき 0、L>R のとき 1。
+// IOCSのCarry方向に依存するため、実機確認後に必要なら符号方向を入れ替える。
+IOCS_F_CMP(BYTE L[], BYTE R[], BYTE M)
+{
+    ^HL = L;
+    ^DE = R;
+    ^A  = M;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  HL,(_HL)
+    LD  DE,(_DE)
+    FNC FNC_CMP
+    LD  A,0
+    JR  Z,IOCS_F_CMP_DONE
+    LD  A,1
+    JR  NC,IOCS_F_CMP_DONE
+    LD  A,$FF
+IOCS_F_CMP_DONE:
+    LD  (_A),A
+    #END
+
+    RETURN ^A;
+}
+
+// L = L MOD R を計算する。
+IOCS_F_MOD(BYTE L[], BYTE R[], BYTE M)
+{
+    IOCS_F_CALL2(L, R, M, IOCS_FN_MOD);
+}
+
+// L = L \ R を計算する。
+// BASICの円記号演算子相当。整数除算系の演算と思われる。
+IOCS_F_YEN(BYTE L[], BYTE R[], BYTE M)
+{
+    IOCS_F_CALL2(L, R, M, IOCS_FN_YEN);
+}
+
+// L = L ^ R を計算する。
+IOCS_F_POWER(BYTE L[], BYTE R[], BYTE M)
+{
+    IOCS_F_CALL2(L, R, M, IOCS_FN_POWER);
+}
+
+// IOCS FNC の単項浮動小数点関数を呼び出す。
+// S は浮動小数点バイナリが保存されているアドレス。結果もここに保存。
+// M は型指定。2:整数、5:単精度浮動小数点、8:倍精度浮動小数点。
+// FN は FNC 番号。実行時に RST 28H 直後の1バイトを書き換えて呼び出す。
+// このライブラリはRAM上で実行する前提のため、自己書き換えを使っている。
+IOCS_F_CALL(BYTE S[], BYTE M, BYTE FN)
+{
+    ^HL = S;
+    ^A  = M;
+    ^BC = FN;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  HL,(_BC)
+    LD  A,L
+    LD  (IOCS_F_CALL_NO),A
+    LD  HL,(_HL)
+    RST 28H
+IOCS_F_CALL_NO:
+    DB  00H
+    #END
+}
+
+// 符号を反転する。
+IOCS_F_NEG(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_NEG);
+}
+
+// 乱数系列の初期値を設定する。
+// S は IOCS が要求する初期値バイナリデータのアドレス。
+IOCS_F_RNDMIZ(BYTE S[])
+{
+    ^HL = S;
+
+    #ASM
+    LD  HL,(_HL)
+    FNC FNC_RNDMIZ
+    #END
+}
+
+// MZ浮動小数点バイナリを符号付きWORD整数へ変換する。
+// S は MZ浮動小数点バイナリ、M は型指定。5:単精度、8:倍精度。
+// 戻り値は HL に返された WORD 値。
+IOCS_F_INT0(BYTE S[], BYTE M)
+{
+    ^HL = S;
+    ^A  = M;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  HL,(_HL)
+    FNC FNC_INT0
+    LD  (_HL),HL
+    #END
+
+    RETURN ^HL;
+}
+
+// MZ浮動小数点バイナリを符号なしWORD整数へ変換する。
+// S は MZ浮動小数点バイナリ、M は型指定。5:単精度、8:倍精度。
+// 戻り値は HL に返された WORD 値。
+IOCS_F_INT2(BYTE S[], BYTE M)
+{
+    ^HL = S;
+    ^A  = M;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  HL,(_HL)
+    FNC FNC_INT2
+    LD  (_HL),HL
+    #END
+
+    RETURN ^HL;
+}
+
+// WORD整数を MZ浮動小数点バイナリへ変換する。
+// V は変換元WORD値、OUT は変換結果の出力先、M は型指定。5:単精度、8:倍精度。
+IOCS_F_FLT0(WORD V, BYTE OUT[], BYTE M)
+{
+    ^DE = V;
+    ^HL = OUT;
+    ^A  = M;
+
+    #ASM
+    LD  A,(_A)
+    LD  B,A
+    LD  DE,(_DE)
+    LD  HL,(_HL)
+    FNC FNC_FLT0
+    #END
+}
+
+// その値を超えない最大の整数を計算する。
+IOCS_F_INT(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_INT);
+}
+
+// 絶対値を計算する。
+IOCS_F_ABS(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_ABS);
+}
+
+// 正弦を計算する。
+IOCS_F_SIN(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_SIN);
+}
+
+// 余弦を計算する。
+IOCS_F_COS(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_COS);
+}
+
+// 正接を計算する。
+IOCS_F_TAN(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_TAN);
+}
+
+// 自然対数を計算する。
+IOCS_F_LN(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_LN);
+}
+
+// 指数関数を計算する。
+IOCS_F_EXP(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_EXP);
+}
+
+// 平方根を計算する。
+IOCS_F_SQR(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_SQR);
+}
+
+// 乱数を計算する。
+IOCS_F_RND(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_RND);
+}
+
+// 逆正接を計算する。
+IOCS_F_ATN(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_ATN);
+}
+
+// 符号を計算する。
+IOCS_F_SGN(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_SGN);
+}
+
+// 常用対数を計算する。
+IOCS_F_LOG(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_LOG);
+}
+
+// 小数部を計算する。
+IOCS_F_FRAC(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_FRAC);
+}
+
+// 円周率を取得する。
+IOCS_F_PAI(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_PAI);
+}
+
+// 度をラジアンへ変換する。
+IOCS_F_RAD(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_RAD);
+}
+
+// 階乗を計算する。
+IOCS_F_FAC(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_FAC);
+}
+
+// ラジアンを度へ変換する。
+IOCS_F_DEG(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_DEG);
+}
+
+// 0方向へ丸めた整数値を計算する。
+IOCS_F_FIX(BYTE S[], BYTE M)
+{
+    IOCS_F_CALL(S, M, IOCS_FN_FIX);
+}

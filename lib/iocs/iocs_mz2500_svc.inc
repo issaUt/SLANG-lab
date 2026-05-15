@@ -1,0 +1,153 @@
+; MZ-2500 IOCS / FNC definitions for AILZ80ASM
+; Source: uploaded IOCS call list PDF and user-supplied IPL ROM
+; Notes:
+;   - AILZ80ASM macro syntax uses: <name> MACRO ... ENDM
+;   - SVC uses RST 18H + 1-byte function number.
+;   - FNC uses RST 28H + 1-byte function number.
+;   - Some names in the source PDF are OCR-unclear; such items are marked.
+
+; ----------------------------------------------------------------------
+; Macros
+; ----------------------------------------------------------------------
+SVC MACRO n
+    RST 18H
+    DB  n
+ENDM
+
+; ----------------------------------------------------------------------
+; SVC (RST 18H)
+; ----------------------------------------------------------------------
+SVC_MONOP      EQU 00H
+SVC_CR1        EQU 01H
+SVC_CR2        EQU 02H
+SVC_CRT1C      EQU 03H
+SVC_CRT1X      EQU 04H
+SVC_CRTMS      EQU 05H
+SVC_LPTOT      EQU 06H
+SVC_LPT1C      EQU 07H
+SVC_DISP       EQU 08H
+SVC_TERM       EQU 09H
+SVC_UNUSED_0A  EQU 0AH
+SVC_UNUSED_0B  EQU 0BH
+SVC_GETL       EQU 0CH
+SVC_INKEY      EQU 0DH
+SVC_BREAK      EQU 0EH
+SVC_HALT       EQU 0FH
+SVC_DI         EQU 10H
+SVC_EI         EQU 11H
+SVC_NEWON      EQU 12H
+SVC_DEASC      EQU 13H
+SVC_DEHEX      EQU 14H
+SVC_CKHEX      EQU 15H
+SVC_ASCHL      EQU 16H
+SVC_COUNT      EQU 17H
+SVC_KKAN       EQU 18H
+SVC_JISHO      EQU 19H
+SVC_OIOCS      EQU 1AH
+SVC_ERRX       EQU 1BH
+SVC_KCONV      EQU 1CH
+SVC_PTRA       EQU 1DH
+SVC_QPOINT     EQU 1EH
+SVC_KCALL      EQU 1FH
+SVC_BELL       EQU 20H
+SVC_PLAY       EQU 21H
+SVC_SOUND      EQU 22H
+SVC_MCTRL      EQU 23H
+SVC_UNUSED_24  EQU 24H
+SVC_UNUSED_25  EQU 25H
+SVC_PRTIO      EQU 26H
+SVC_INPIO      EQU 27H
+SVC_CLRIO      EQU 28H
+SVC_UNUSED_29  EQU 29H
+SVC_PWDS       EQU 2AH
+SVC_MKDIR      EQU 2BH
+SVC_DEVNM      EQU 2CH
+SVC_DEVFN      EQU 2DH
+SVC_LUCHK      EQU 2EH
+SVC_LOPEN      EQU 2FH
+SVC_LOADF      EQU 30H
+SVC_SAVEF      EQU 31H
+SVC_UNUSED_32  EQU 32H
+SVC_RWOPEN     EQU 33H
+SVC_BGETL      EQU 34H
+SVC_INMSG      EQU 35H
+SVC_UNPUT      EQU 36H
+SVC_PRSTR      EQU 37H
+SVC_CLKL       EQU 38H
+SVC_DIR        EQU 39H
+SVC_CHDIR      EQU 3AH
+SVC_UNUSED_3B  EQU 3BH
+SVC_FINIT      EQU 3CH
+SVC_DELET      EQU 3DH
+SVC_RENAM      EQU 3EH
+SVC_LOCK       EQU 3FH
+SVC_BRD        EQU 40H
+SVC_FFUNC      EQU 41H
+SVC_DFUNC      EQU 42H
+SVC_ERCVR      EQU 43H
+SVC_SWAP       EQU 44H
+SVC_CLS        EQU 45H
+SVC_POSCK      EQU 46H
+SVC_POSSV      EQU 47H
+SVC_PSET       EQU 48H
+SVC_LINE       EQU 49H
+SVC_PATTR      EQU 4AH
+SVC_BOX        EQU 4BH
+SVC_PAINT      EQU 4CH
+SVC_CIRCLE     EQU 4DH
+SVC_POINT      EQU 4EH
+SVC_HCPY       EQU 4FH
+SVC_DFKEY      EQU 50H
+SVC_GINIT      EQU 51H
+SVC_VIEW       EQU 52H
+SVC_SCREN      EQU 53H
+SVC_COLOR      EQU 54H
+SVC_SYMBL      EQU 55H
+SVC_HVIEW      EQU 56H
+SVC_CREP       EQU 57H
+SVC_GPUT       EQU 58H
+SVC_GGET       EQU 59H
+SVC_PENSE      EQU 5AH
+SVC_MOVE       EQU 5BH
+SVC_PRI        EQU 5CH
+SVC_CBLOC      EQU 5DH
+SVC_CRTI       EQU 5EH
+SVC_COCNV      EQU 5FH
+SVC_HROLL      EQU 60H
+SVC_UNUSED_61  EQU 61H
+SVC_UNUSED_62  EQU 62H
+SVC_GRINT      EQU 63H
+SVC_TINIT      EQU 64H
+SVC_MSGX       EQU 65H
+SVC_TMOD       EQU 66H
+SVC_GPCG       EQU 67H
+SVC_SPCG       EQU 68H
+SVC_TGET       EQU 69H
+SVC_TSCRN      EQU 6AH
+SVC_TATR       EQU 6BH
+SVC_TWID       EQU 6CH
+SVC_TWARE      EQU 6DH
+SVC_TDARE      EQU 6EH
+SVC_CMOV       EQU 6FH
+SVC_TCLR       EQU 70H
+SVC_TSCRL      EQU 71H
+SVC_CRPUT      EQU 72H
+SVC_CRGET      EQU 73H
+SVC_SETCG      EQU 74H
+SVC_QTEXT      EQU 75H
+SVC_CURBL      EQU 76H
+SVC_TSUB       EQU 77H
+SVC_RS232      EQU 78H
+SVC_RTC        EQU 79H
+SVC_MOUSE      EQU 7AH
+SVC_IOSUB      EQU 7BH
+SVC_DVCAL      EQU 7CH
+SVC_FDRES      EQU 7DH
+SVC_CMT        EQU 7EH
+SVC_VOICE      EQU 7FH
+
+; helpful aliases
+SVC_PRINTC     EQU SVC_CRT1C
+SVC_PRINTX     EQU SVC_CRT1X
+SVC_PRINTS     EQU SVC_CRTMS
+SVC_GCLS       EQU SVC_CLS

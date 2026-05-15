@@ -610,3 +610,19 @@ MAIN()
 ```
 
 外部ファイル化するときは、ライブラリ側がどのグローバル変数や include 済み関数に依存しているかを意識します。この例では `DRAW_FRAME()` が `@BOXC()` に依存するため、呼び出し側で先に `GRAPHF.LIB` を include しています。
+
+
+## MZ-2500 IOCS 浮動小数点サンプル
+
+MZ-2500 IOCS の FNC 系浮動小数点処理を使うサンプルは、`examples/iocs/` に置いています。
+
+- `FLOATTEST.SL`
+  文字列から MZ 浮動小数点への変換、平方根、文字列表示、SLANG FLOAT への変換を確認します。
+
+- `FCALCTEST.SL`
+  MZ 浮動小数点同士の二項演算を確認します。
+
+- `FCALCETCTEST.SL`
+  比較、整数化、WORD整数からMZ浮動小数点への変換などを確認します。
+
+詳しい注意点は `docs/MZ2500-IOCS-FLOAT.md` を参照してください。特に、負数表示は `IOCS_C_ASFL` では overflow するケースがあるため、通常表示では `IOCS_C_NMFL` を使うのが安定しています。

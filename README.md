@@ -7,7 +7,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## 構成
 
 - `docs/`
-  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順を記録しています。
+  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順、`docs/MZ2500-IOCS-FLOAT.md` に MZ-2500 IOCS 浮動小数点調査メモを記録しています。
 
 - `examples/`
   SLANG の実用サンプル。機種依存や必要ライブラリがある場合は README やソース内コメントに記載します。
@@ -21,7 +21,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## ライブラリ配置
 
 - `lib/iocs/`
-  MZ-2500 IOCS 向けの試作ライブラリです。`MZ25IOCS_TEXT.LIB` はテキスト/PCG 周り、`MZ25IOCS_GFX.LIB` はグラフィック周りを置いています。内部で `iocs_mz2500.inc` をアセンブラ include します。
+  MZ-2500 IOCS 向けの試作ライブラリです。`MZ25IOCS_TEXT.LIB` はテキスト/PCG 周り、`MZ25IOCS_GFX.LIB` はグラフィック周り、`MZ25IOCS_FNC.LIB` は数値変換/浮動小数点周りを置いています。内部で `iocs_mz2500*.inc` をアセンブラ include します。
 
 - `lib/fixedpoint/`
   16bit 符号付き固定小数点ライブラリです。2D/3D の回転、三角関数、簡易 `atan2` などを含みます。
@@ -29,7 +29,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## examples 配置
 
 - `examples/iocs/`
-  MZ-2500 IOCS ライブラリの動作確認サンプルです。
+  MZ-2500 IOCS ライブラリの動作確認サンプルです。浮動小数点/FNC 系の確認コードも `examples/iocs/` に置いています。
 
 - `examples/draw3d/`
   固定小数点と IOCS グラフィックを使った 3D 描画サンプルです。

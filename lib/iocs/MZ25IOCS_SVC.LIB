@@ -1,0 +1,479 @@
+#ASM
+include "../../lib/iocs/iocs_mz2500_svc.inc"
+#END
+
+// IOCS CRTI 用の画面モード文字列を渡す。
+// SLANG の文字列代入は「配列へのコピー」ではなく文字列データへのポインタ設定になる。
+// ここではローカル間接変数 BUF に文字列ポインタを持たせ、HL に実アドレスを渡す。
+IOCS_CRTI2(BYTE T)
+VAR BYTE BUF[];
+{
+    CASE T OF {
+        0: BUF = "320,200,16";
+        1: BUF = "640,200,16";
+        2: BUF = "640,400,16";
+        3: BUF = "320,200,256";
+        OTHERS: RETURN;
+    }
+
+    ^HL = &BUF[0];
+    #ASM
+    LD  HL,(_HL)
+    SVC SVC_CRTI
+    #END
+}
+
+// グラフィック画面を初期化する。
+// W,H,C から IOCS GINIT のモードビットを組み立てる。
+IOCS_GINIT(WORD W, WORD H, WORD C)
+VAR BYTE A;
+{
+    A = 0;
+    CASE W OF {
+        640: A = 10000000B;
+        320:;
+        OTHERS:;
+    }
+
+    CASE H OF {
+        400: A = A OR 01000000B;
+        200:;
+        OTHERS:;
+    }
+
+    CASE C OF {
+        4:;
+        16:  A = A OR 010000B;
+        256: A = A OR 100000B;
+        OTHERS:;
+    }
+
+    ^A = A;
+    #ASM
+    LD   A,(_A)
+    SVC  SVC_GINIT
+    #END
+}
+
+// グラフィック描画範囲を設定する。
+IOCS_VIEW(WORD X1, WORD Y1, WORD X2, WORD Y2)
+VAR BYTE BUF[12];
+VAR WORD WBUF[];
+{
+    BUF[0]  = 0;
+    BUF[1]  = 0;
+    BUF[2]  = 0;
+    BUF[3]  = 0;
+
+    WBUF = &BUF[4];
+    WBUF[0] = X1;
+    WBUF[1] = Y1;
+    WBUF[2] = X2;
+    WBUF[3] = Y2;
+
+    ^HL = &BUF[0];
+    #ASM
+    LD   HL, (_HL)
+    SVC  SVC_VIEW
+    #END
+}
+
+// 画面関係を初期状態へ戻す。
+IOCS_INITSCREEN()
+{
+    ^A = 0FFh;
+
+    #ASM
+    LD  A,(_A)
+    SVC SVC_SCREN
+    #END
+}
+
+// 描画ページと表示ページを切り替える。
+// 今のところ 0/1 画面のみ対応。
+// GI: 描画対象ページ、GO: 表示ページ。
+IOCS_SCREEN(BYTE GI, BYTE GO)
+{
+    // 描画対象ページを設定する。
+    ^A = 0;
+    if (GI == 0) {
+        ^HL = 0;
+    } else {
+        ^HL = GI;
+    }
+    #ASM
+    LD  A,(_A);
+    LD  HL,(_HL);
+    SVC SVC_SCREN;
+    #END
+
+    // 表示ページを設定する。
+    ^A = 1;
+    if (GO == 0) {
+        ^HL = 00000010b;
+    } else {
+        ^HL = 00000101b;
+    }
+    #ASM
+    LD  A,(_A)
+    LD  HL,(_HL)
+    SVC SVC_SCREN
+    #END
+}
+
+// グラフィック画面を指定色で消去する。
+IOCS_CLS(BYTE C)
+{
+    ^A = C;
+    #ASM
+    LD  A,(_A)
+    SVC SVC_CLS
+    #END
+}
+
+// ペン形状を設定する。
+// 現在は固定値のみ。詳細なペン形状指定は未整理。
+IOCS_PENSE()  // IOCS_PENSE(T)
+VAR BYTE T;
+{
+    ^A = 0;   // 現在ペン形状は未設定
+    #ASM
+    LD  A,(_A)
+    SVC SVC_PENSE
+    #END
+}
+
+// 点を描画する。
+// 640x200 では動作確認済み。640x400 では描画されないケースがあり、
+// 現状のデモでは点描画を IOCS_LINE(X,Y,X,Y,C) で代用している。
+IOCS_PSET_RAW(WORD X, WORD Y, BYTE C)
+VAR BYTE BUF[6];
+VAR WORD WBUF[];
+{
+    BUF[0] = C;
+    BUF[1] = 0;           // MODE
+
+    WBUF = &BUF[2];
+    WBUF[0] = X;
+    WBUF[1] = Y;
+
+    ^HL = &BUF[0];
+    #ASM
+    LD   HL, (_HL)
+    SVC  SVC_PSET
+    #END
+}
+
+// 点を描画する。640x400で誤動作するため、LINEで代用
+IOCS_PSET(WORD X, WORD Y, BYTE C)
+VAR BYTE BUF[13];
+VAR WORD WBUF[];
+{
+    BUF[0] = C;
+    BUF[1] = 0;           // MODE
+
+    WBUF = &BUF[2];
+    WBUF[0] = X;
+    WBUF[1] = Y;
+    WBUF[2] = X;
+    WBUF[3] = Y;
+
+    BUF[10] = 0;          // Line Style Type
+    BUF[11] = $FF;        // Line Style
+    BUF[12] = $FF;        // Line Style
+
+    ^HL = &BUF[0];
+    #ASM
+    LD   HL, (_HL)
+    SVC  SVC_LINE
+    #END
+}
+
+
+// 現在位置を設定する。
+IOCS_POSSV_SET(WORD X, WORD Y)
+VAR BYTE BUF[6];
+VAR WORD WBUF[];
+{
+    WBUF = &BUF[0];
+    WBUF[0] = X;
+    WBUF[1] = Y;
+
+    ^HL = &BUF[0];
+    #ASM
+    OR  A         ; Cy = 0;
+    LD  HL,(_HL)
+    SVC SVC_POSSV
+    #END
+}
+
+// 現在位置を読み取る。
+IOCS_POSSV_READ(WORD BUF[])
+{
+    ^HL = &BUF[0];
+    #ASM
+    SCF             ; Cy=1
+    LD  HL,(_HL)
+    SVC SVC_POSSV
+
+    LD  (_DE),DE
+    LD  (_HL),HL
+    #END
+
+    BUF[0] = ^DE;
+    BUF[1] = ^HL;
+}
+
+// 線を描画する。
+// 座標は WORD、色と描画モードは BYTE の IOCS_LINE パラメータブロックへ詰める。
+IOCS_LINE(WORD X1, WORD Y1, WORD X2, WORD Y2, BYTE C)
+VAR BYTE BUF[13];
+VAR WORD WBUF[];
+{
+    /*
+    BUF[0] = C;
+    BUF[1] = 0;           // MODE
+    BUF[2] = X1 AND $FF;
+    BUF[3] = X1 >>  8;
+    BUF[4] = Y1 AND $FF;
+    BUF[5] = Y1 >>  8;
+    BUF[6] = X2 AND $FF;
+    BUF[7] = X2 >>  8;
+    BUF[8] = Y2 AND $FF;
+    BUF[9] = Y2 >>  8;
+    BUF[10] = 0;          // Line Style Type
+    BUF[11] = $FF;        // Line Style
+    BUF[12] = $FF;        // Line Style
+    */
+
+    BUF[0] = C;
+    BUF[1] = 0;
+
+    WBUF = &BUF[2];
+    WBUF[0] = X1;
+    WBUF[1] = Y1;
+    WBUF[2] = X2;
+    WBUF[3] = Y2;
+
+    BUF[10] = 0;
+    BUF[11] = $FF;
+    BUF[12] = $FF;
+
+    ^HL = &BUF[0];
+    #ASM
+    LD   HL, (_HL)
+    SVC  SVC_LINE
+    #END
+}
+
+// 四角形を描画する。
+// M=0: 枠線のみ、M=1: パターン線のみ、M=2: 塗りつぶし、M=3: パターン塗りつぶし。
+IOCS_BOX(WORD X1, WORD Y1, WORD X2, WORD Y2, BYTE C, BYTE M)
+VAR BYTE BUF[13];
+VAR WORD WBUF[];
+{
+    BUF[0] = C;
+    BUF[1] = 0;           // MODE
+
+    WBUF = &BUF[2];
+    WBUF[0] = X1;
+    WBUF[1] = Y1;
+    WBUF[2] = X2;
+    WBUF[3] = Y2;
+
+    BUF[10] = M;          // Line Style Type
+    BUF[11] = $FF;        // Line Style
+    BUF[12] = $FF;        // Line Style
+
+    ^HL = &BUF[0];
+    #ASM
+    LD   HL, (_HL)
+    SVC  SVC_BOX
+    #END
+}
+
+// 円を描画する。
+// 現状は中心、半径、色のみ指定し、拡張パラメータは 0 で埋める。
+IOCS_CIRCLE(WORD X, WORD Y, WORD R, BYTE C)
+VAR BYTE I;
+VAR BYTE BUF[24];
+VAR WORD WBUF[];
+{
+    BUF[0] = C;
+    BUF[1] = 0;           // MODE
+
+    WBUF = &BUF[2];
+    WBUF[0] = X;
+    WBUF[1] = Y;
+    WBUF[2] = R;
+
+    BUF[8] = 0;
+    BUF[9]  = 0;   // Start Angle 0.0
+    BUF[10] = 0;
+    BUF[11] = 0;
+    BUF[12] = 0;
+    BUF[13] = 0;
+
+    BUF[14] = $89; // End Angle 360.0
+    BUF[15] = $34;
+    BUF[16] = 0;
+    BUF[17] = 0;
+    BUF[18] = 0;
+
+    BUF[19] = $81; // Aspect Ratio 1.0
+    BUF[20] = 0;
+    BUF[21] = 0;
+    BUF[22] = 0;
+    BUF[23] = 0;
+
+    ^HL = &BUF[0];
+    #ASM
+    LD   HL, (_HL)
+    SVC  SVC_CIRCLE
+    #END
+}
+
+// パレットを初期状態へ戻す。
+IOCS_INITCOLOR()
+{
+    #ASM
+    LD  A,0
+    SCF             ; Cy=1
+    SVC SVC_COLOR
+    #END
+}
+
+// 16色パレットの色番号対応を変更する。
+// TABLE は [PaletteID, ColorIndex] の繰り返しで、C 個分を指定する。
+IOCS_COLOR(BYTE C, BYTE TABLE[])
+// C: テーブルサイズ
+// TABLE: 指定サイズ分のテーブルx2,PaletteID, COLORの順
+VAR BYTE I,J,E;
+VAR BYTE BUF[33];
+{
+    /*
+    // NOTE:
+    // IOCS_COLOR は色番号から参照パレット番号への対応を変更する。
+    // 4096色パレットを設定する前に 15->1 のような非単調/巻き戻り指定を行うと、
+    // パレット15番のRGB値自体は更新されても、実表示色が期待通りにならない場合がある。
+    // 4096色設定と組み合わせる場合は、identity mapping(0->0 ... 15->15)、
+    // または必要な範囲だけの単調な指定に留めるのが安全。
+    */
+    IF (C == 0 ) { RETURN; }
+    IF (C > 16) { C = 16; }
+    BUF[0] = C;
+    E=C-1;
+    FOR I= 0 TO E {
+        J = I * 2;
+        BUF[J+1] = TABLE[J];    // PaletteID
+        BUF[J+2] = TABLE[J+1];  // ColorIndex
+    }
+
+    ^HL = &BUF[0];
+    #ASM
+    OR  A       ; Cy = 0
+    LD  A,0
+    LD  HL,(_HL)
+    SVC SVC_COLOR
+    #END
+}
+
+// 4096色パレットのRGB値を変更する。
+// TABLE は [PaletteID, G, R, B] の繰り返しで、C 個分を指定する。
+IOCS_COLOR4096(BYTE C, BYTE TABLE[])
+// C: テーブルサイズ。配列はCx4のサイズが必要
+// TABLE: 1色あたり、Color, 3ByteのRGB、計4Byteデータセット
+VAR BYTE I,J,E;
+VAR BYTE BUF[65];
+{
+    IF (C == 0 ) { RETURN; }
+    IF (C > 16) { C = 16; }
+    BUF[0] = C;
+    E=C-1;
+    FOR I= 0 TO E {
+        J = I * 4;
+        BUF[J+1] = TABLE[J];    // PaletteID
+        BUF[J+2] = TABLE[J+1];  // Green Level 0..15
+        BUF[J+3] = TABLE[J+2];  // Red Level 0..15
+        BUF[J+4] = TABLE[J+3];  // Blue Level 0..15
+    }
+
+    ^HL = &BUF[0];
+    #ASM
+    OR  A       ; Cy = 0
+    LD  A,1
+    LD  HL,(_HL)
+    SVC SVC_COLOR
+    #END
+}
+
+
+// 文字列を表示する。
+// S は 0 終端文字列を指す BYTE 間接変数。
+IOCS_CRTMS(BYTE S[])
+{
+    ^DE = S;
+    #ASM
+    LD   DE,(_DE)
+    SVC  SVC_CRTMS
+    #END
+}
+
+
+// 8x8ドットPCGパターンを定義する。
+// CH: 1バイト文字コード。BASIC の DEF CHR$(64) なら $40 を指定する。
+// SEL: PCGセレクト番号。IOCS仕様では 0..3。
+// DATA: 1文字分の24バイトデータ。B面8バイト、R面8バイト、G面8バイトの順。
+// SPCG はパターンを DIRARE($1000-) から読むため、先に MEM[$1000+I] へコピーする。
+// 8x16ドットPCGは文字コードが $0100..$01FE になるため、別関数として扱う予定。
+IOCS_SPCG8(BYTE CH, BYTE SEL, BYTE DATA[])
+VAR BYTE I;
+{
+    FOR I = 0 TO 23 {
+        MEM[$1000 + I] = DATA[I];
+    }
+
+    ^DE = CH;
+    ^A = SEL;
+    #ASM
+    LD  DE,(_DE)
+    LD  A,(_A)
+    LD  B,A
+    SVC SVC_SPCG
+    #END
+}
+
+IOCS_LOCATE(BYTE X, BYTE Y)
+VAR WORD XY;
+{
+    XY = Y << 8;
+    XY = XY OR X;
+    ^HL = XY;
+
+    #ASM
+    LD HL,(_HL)
+    SVC SVC_CMOV
+    #END
+}
+
+IOCS_GETCURSOR(BYTE POS[])
+VAR BYTE BUF[];
+{
+    BUF = $05E2;
+    POS[0] = BUF[0];
+    POS[1] = BUF[1];
+}
+
+/*
+// PCGデータ定義例。
+// BASIC の hexchr$("8DAD...") は、2桁ずつ BYTE 配列に展開して持つ。
+// 文字列ではなく BYTE 配列にすることで、$00 を含むパターンも安全に扱える。
+VAR BYTE PCG_64[24] = {
+    $8D,$AD,$AD,$AD,$AD,$AD,$AD,$AD,    // B plane
+    $00,$00,$04,$0C,$0C,$0C,$0C,$08,    // R plane
+    $00,$01,$81,$84,$8D,$0D,$8D,$88     // G plane
+};
+
+// 使用例:
+// IOCS_SPCG8($40, 0, PCG_64);
+*/
