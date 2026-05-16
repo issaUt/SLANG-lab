@@ -84,6 +84,27 @@ IOCS_SF2MZD(BYTE SF[], BYTE MZD[])
     MZD[7] = 0;
 }
 
+// SLANG FLOAT をMZ単精度へ変換
+IOCS_SF2MZF2(FLOAT SF, BYTE MZD[])
+VAR BYTE SFB[];
+{
+    SFB = &SF;
+    IOCS_SF2MZF(SFB, MZD);
+}
+
+// SLANG FLOAT をMZ倍精度に変換
+IOCS_SF2MZD2(FLOAT SF, BYTE MZD[])
+VAR BYTE SFB[];
+{
+    SFB = &SF;
+    IOCS_SF2MZF(SFB, MZD);
+    MZD[4] = 0;
+    MZD[5] = 0;
+    MZD[6] = 0;
+    MZD[7] = 0;
+}
+
+
 // MZ単精度を SLANG FLOAT へ変換する。
 // MZ側の指数がSLANGの表現範囲を超える場合は最大値に飽和する。
 // MZ側の指数が小さすぎる場合は 0 にする。
@@ -146,6 +167,7 @@ VAR BYTE I;
         MZF[I] = MZD[I];
     }
 }
+
 
 // IOCS の文字列数値変換 FNC_C_FLAS を呼び出す。
 // S は 0 終端の数値文字列、OUT は変換結果の出力先。

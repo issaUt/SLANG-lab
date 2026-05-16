@@ -7,7 +7,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## 構成
 
 - `docs/`
-  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順、`docs/MZ2500-IOCS-FLOAT.md` に MZ-2500 IOCS 浮動小数点調査メモを記録しています。
+  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順、`docs/MZ2500-IOCS-FLOAT.md` に MZ-2500 IOCS 浮動小数点調査メモ、`docs/MZ2500-IOCS-GFX.md` に MZ-2500 IOCS グラフィック調査メモを記録しています。
 
 - `examples/`
   SLANG の実用サンプル。機種依存や必要ライブラリがある場合は README やソース内コメントに記載します。
@@ -29,7 +29,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## examples 配置
 
 - `examples/iocs/`
-  MZ-2500 IOCS ライブラリの動作確認サンプルです。浮動小数点/FNC 系の確認コードも `examples/iocs/` に置いています。
+  MZ-2500 IOCS ライブラリの動作確認サンプルです。`GTEST.SL` は 640x400 グラフィック、PSET/SYMBOL、ハードウェアスクロールの確認、浮動小数点/FNC 系の確認コードも `examples/iocs/` に置いています。
 
 - `examples/draw3d/`
   固定小数点と IOCS グラフィックを使った 3D 描画サンプルです。
