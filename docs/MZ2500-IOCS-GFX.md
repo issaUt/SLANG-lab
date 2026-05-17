@@ -36,6 +36,34 @@ SLANG から通常のローカル配列を `HL` に渡すだけだと、640x400 
 
 このため、400ライン用関数では `$0CC0` / `$0CD0` を一時ワークとして使います。長い文字列や同時利用する処理では、この範囲の上書きに注意してください。
 
+## 画面ページ切り替え
+
+`SVC_SCREN` の `A=1` は、単純なページ番号ではなく表示フラグを `L` に渡す仕様として扱います。PDF資料では 320x200x16色の組み合わせが `0,2` / `1,3` のように読めますが、BASIC バイナリと実動確認では `0,1` / `2,3` の組み合わせでした。
+
+BASIC バイナリ内の `SVC_SCREN` 呼び出しを追った結果、320x200x16色では次の値を使っています。
+
+```text
+単独ページ表示:
+  page 0 -> L=$02
+  page 1 -> L=$04
+  page 2 -> L=$03
+  page 3 -> L=$05
+
+重ね合わせ表示:
+  page 0/1 -> L=$06
+  page 2/3 -> L=$07
+```
+
+ライブラリでは、640x200x16色の 0/1 画面切り替え用に `IOCS_SCREEN` を残し、320x200x16色向けに `IOCS_SCREEN320` と `IOCS_SCREEN320_GROUP` を追加しています。
+
+```slang
+IOCS_SCREEN(BYTE GI, BYTE GO)          // 640x200x16色 0/1画面
+IOCS_SCREEN320(BYTE GI, BYTE GO)       // 320x200x16色 0..3画面
+IOCS_SCREEN320_GROUP(BYTE GI, BYTE GROUP)
+```
+
+`IOCS_SCREEN320_GROUP` は `GROUP=0` で page 0/1、`GROUP!=0` で page 2/3 を表示します。描画先ページは `GI` で指定します。
+
 ## スクロール
 
 `IOCS_HROLL(BYTE MODE, WORD Y)` を追加しています。
