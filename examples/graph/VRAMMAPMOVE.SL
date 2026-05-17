@@ -1,0 +1,326 @@
+#include "../../lib/iocs/MZ25IOCS_SVC.LIB"
+#include "../../lib/MZ25VRAM_GFX.LIB"
+
+VAR BYTE TILE_GRASS[32] = {
+    $11,$44,$11,$44,$11,$44,$11,$44,
+    $00,$00,$00,$00,$00,$00,$00,$00,
+    $55,$22,$55,$22,$55,$22,$55,$22,
+    $00,$00,$00,$00,$00,$00,$00,$00
+};
+
+VAR BYTE TILE_WATER[32] = {
+    $00,$00,$00,$00,$00,$00,$00,$00,
+    $18,$24,$42,$81,$18,$24,$42,$81,
+    $18,$3C,$7E,$FF,$18,$3C,$7E,$FF,
+    $00,$00,$00,$00,$00,$00,$00,$00
+};
+
+VAR BYTE TILE_WALL[32] = {
+    $FF,$81,$81,$FF,$FF,$81,$81,$FF,
+    $00,$7E,$42,$00,$00,$7E,$42,$00,
+    $00,$00,$3C,$24,$24,$3C,$00,$00,
+    $00,$00,$00,$18,$18,$00,$00,$00
+};
+
+VAR BYTE TILE_ROAD[32] = {
+    $00,$18,$18,$00,$00,$18,$18,$00,
+    $00,$18,$18,$00,$00,$18,$18,$00,
+    $FF,$E7,$E7,$FF,$FF,$E7,$E7,$FF,
+    $00,$00,$00,$00,$00,$00,$00,$00
+};
+
+VAR BYTE TILE_GOAL[32] = {
+    $81,$42,$24,$18,$18,$24,$42,$81,
+    $18,$24,$42,$81,$81,$42,$24,$18,
+    $FF,$81,$BD,$A5,$A5,$BD,$81,$FF,
+    $00,$00,$00,$00,$00,$00,$00,$00
+};
+
+VAR BYTE MAP_DATA[768] = {
+    2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+    2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,
+    2,0,0,4,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,4,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,3,3,3,2,3,3,3,3,3,3,3,3,3,3,3,2,3,3,3,3,3,3,2,3,3,3,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,1,1,1,1,1,1,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,1,1,1,1,1,1,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,1,1,1,1,1,1,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,1,1,1,1,1,1,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,3,3,3,2,3,3,3,3,3,3,3,3,3,3,3,2,3,3,3,3,3,3,2,3,3,3,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,1,1,1,1,1,2,1,1,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,1,1,1,1,1,2,1,1,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,1,1,1,1,1,2,1,1,0,0,0,2,
+    2,0,0,0,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,1,1,1,1,1,2,1,1,0,0,0,2,
+    2,0,0,3,3,3,2,3,3,3,3,3,3,3,3,3,3,3,2,3,3,3,3,3,3,2,3,3,3,0,0,2,
+    2,0,0,4,0,0,2,0,0,0,0,0,0,0,0,0,0,0,2,0,0,0,0,0,0,2,0,0,0,4,0,2,
+    2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,
+    2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,
+    2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2
+};
+
+PUT_MAP_TILE(BYTE PAGE, BYTE XBYTE, BYTE Y, BYTE T)
+{
+    IF (T == 0) {
+        MZ25_VRAM_PUT_TILE8(PAGE, XBYTE, Y, &TILE_GRASS);
+    }
+    IF (T == 1) {
+        MZ25_VRAM_PUT_TILE8(PAGE, XBYTE, Y, &TILE_WATER);
+    }
+    IF (T == 2) {
+        MZ25_VRAM_PUT_TILE8(PAGE, XBYTE, Y, &TILE_WALL);
+    }
+    IF (T == 3) {
+        MZ25_VRAM_PUT_TILE8(PAGE, XBYTE, Y, &TILE_ROAD);
+    }
+    IF (T == 4) {
+        MZ25_VRAM_PUT_TILE8(PAGE, XBYTE, Y, &TILE_GOAL);
+    }
+}
+
+DRAW_MAP_VIEW(BYTE PAGE, BYTE SX, BYTE SY, BYTE VIEW_X, BYTE VIEW_Y)
+VAR X, Y, I;
+{
+    FOR Y = 0 TO 11 {
+        FOR X = 0 TO 19 {
+            I = (VIEW_Y + Y) * 32 + VIEW_X + X;
+            PUT_MAP_TILE(PAGE, SX + X, SY + Y * 8, MAP_DATA[I]);
+        }
+    }
+}
+
+DRAW_MAP_COL(BYTE PAGE, BYTE SX, BYTE SY, BYTE VIEW_X, BYTE VIEW_Y, BYTE COL)
+VAR Y, I;
+{
+    FOR Y = 0 TO 11 {
+        I = (VIEW_Y + Y) * 32 + VIEW_X + COL;
+        PUT_MAP_TILE(PAGE, SX + COL, SY + Y * 8, MAP_DATA[I]);
+    }
+}
+
+DRAW_MAP_ROW(BYTE PAGE, BYTE SX, BYTE SY, BYTE VIEW_X, BYTE VIEW_Y, BYTE ROW)
+VAR X, I;
+{
+    FOR X = 0 TO 19 {
+        I = (VIEW_Y + ROW) * 32 + VIEW_X + X;
+        PUT_MAP_TILE(PAGE, SX + X, SY + ROW * 8, MAP_DATA[I]);
+    }
+}
+
+DRAW_MAP_VIEW_FAST(BYTE VIEW_X, BYTE VIEW_Y)
+{
+    ^A = VIEW_X;
+    #ASM
+    LD   A,(_A)
+    LD   (DRAW_MAP_VIEW_FAST_VIEW_X),A
+    #END
+
+    ^A = VIEW_Y;
+    #ASM
+    LD   A,(_A)
+    LD   (DRAW_MAP_VIEW_FAST_VIEW_Y),A
+
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (DRAW_MAP_VIEW_FAST_SAVE),A
+
+    LD   A,20H
+    LD   (DRAW_MAP_VIEW_FAST_BLOCK),A
+    LD   HL,DRAW_MAP_VIEW_FAST_TILE_TABLE_P0
+    LD   (DRAW_MAP_VIEW_FAST_TABLE),HL
+
+    LD   C,4
+DRAW_MAP_VIEW_FAST_PLANE:
+    PUSH BC
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(DRAW_MAP_VIEW_FAST_BLOCK)
+    OUT  (0B5H),A
+
+    CALL DRAW_MAP_VIEW_FAST_PLANE_PROC
+
+    LD   A,(DRAW_MAP_VIEW_FAST_BLOCK)
+    ADD  A,4
+    LD   (DRAW_MAP_VIEW_FAST_BLOCK),A
+    LD   HL,(DRAW_MAP_VIEW_FAST_TABLE)
+    LD   DE,10
+    ADD  HL,DE
+    LD   (DRAW_MAP_VIEW_FAST_TABLE),HL
+    POP  BC
+    DEC  C
+    JR   NZ,DRAW_MAP_VIEW_FAST_PLANE
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(DRAW_MAP_VIEW_FAST_SAVE)
+    OUT  (0B5H),A
+    EI
+    JP   DRAW_MAP_VIEW_FAST_END
+
+DRAW_MAP_VIEW_FAST_PLANE_PROC:
+    LD   HL,_V_MAP_DATA
+    LD   A,(DRAW_MAP_VIEW_FAST_VIEW_Y)
+    OR   A
+    JR   Z,DRAW_MAP_VIEW_FAST_MAP_ADD_X
+    LD   B,A
+    LD   DE,32
+DRAW_MAP_VIEW_FAST_MAP_Y_LOOP:
+    ADD  HL,DE
+    DJNZ DRAW_MAP_VIEW_FAST_MAP_Y_LOOP
+DRAW_MAP_VIEW_FAST_MAP_ADD_X:
+    LD   A,(DRAW_MAP_VIEW_FAST_VIEW_X)
+    LD   E,A
+    LD   D,0
+    ADD  HL,DE
+    LD   (DRAW_MAP_VIEW_FAST_MAP_ROW),HL
+
+    LD   HL,264AH
+    LD   (DRAW_MAP_VIEW_FAST_DEST_ROW),HL
+    LD   A,12
+DRAW_MAP_VIEW_FAST_TILE_ROW:
+    LD   (DRAW_MAP_VIEW_FAST_ROW_COUNT),A
+    LD   HL,(DRAW_MAP_VIEW_FAST_MAP_ROW)
+    LD   (DRAW_MAP_VIEW_FAST_MAP_PTR),HL
+    LD   HL,(DRAW_MAP_VIEW_FAST_DEST_ROW)
+    LD   (DRAW_MAP_VIEW_FAST_DEST_PTR),HL
+    LD   A,20
+DRAW_MAP_VIEW_FAST_TILE_COL:
+    LD   (DRAW_MAP_VIEW_FAST_COL_COUNT),A
+
+    LD   HL,(DRAW_MAP_VIEW_FAST_MAP_PTR)
+    LD   A,(HL)
+    INC  HL
+    LD   (DRAW_MAP_VIEW_FAST_MAP_PTR),HL
+
+    LD   L,A
+    LD   H,0
+    ADD  HL,HL
+    LD   DE,(DRAW_MAP_VIEW_FAST_TABLE)
+    ADD  HL,DE
+    LD   E,(HL)
+    INC  HL
+    LD   D,(HL)
+
+    LD   HL,(DRAW_MAP_VIEW_FAST_DEST_PTR)
+    LD   B,8
+DRAW_MAP_VIEW_FAST_TILE_BYTE:
+    LD   A,(DE)
+    LD   (HL),A
+    INC  DE
+    PUSH DE
+    LD   DE,40
+    ADD  HL,DE
+    POP  DE
+    DJNZ DRAW_MAP_VIEW_FAST_TILE_BYTE
+
+    LD   HL,(DRAW_MAP_VIEW_FAST_DEST_PTR)
+    INC  HL
+    LD   (DRAW_MAP_VIEW_FAST_DEST_PTR),HL
+    LD   A,(DRAW_MAP_VIEW_FAST_COL_COUNT)
+    DEC  A
+    JR   NZ,DRAW_MAP_VIEW_FAST_TILE_COL
+
+    LD   HL,(DRAW_MAP_VIEW_FAST_MAP_ROW)
+    LD   DE,32
+    ADD  HL,DE
+    LD   (DRAW_MAP_VIEW_FAST_MAP_ROW),HL
+    LD   HL,(DRAW_MAP_VIEW_FAST_DEST_ROW)
+    LD   DE,320
+    ADD  HL,DE
+    LD   (DRAW_MAP_VIEW_FAST_DEST_ROW),HL
+    LD   A,(DRAW_MAP_VIEW_FAST_ROW_COUNT)
+    DEC  A
+    JR   NZ,DRAW_MAP_VIEW_FAST_TILE_ROW
+    RET
+
+DRAW_MAP_VIEW_FAST_TILE_TABLE_P0:
+    DW   _V_TILE_GRASS+0,_V_TILE_WATER+0,_V_TILE_WALL+0,_V_TILE_ROAD+0,_V_TILE_GOAL+0
+DRAW_MAP_VIEW_FAST_TILE_TABLE_P1:
+    DW   _V_TILE_GRASS+8,_V_TILE_WATER+8,_V_TILE_WALL+8,_V_TILE_ROAD+8,_V_TILE_GOAL+8
+DRAW_MAP_VIEW_FAST_TILE_TABLE_P2:
+    DW   _V_TILE_GRASS+16,_V_TILE_WATER+16,_V_TILE_WALL+16,_V_TILE_ROAD+16,_V_TILE_GOAL+16
+DRAW_MAP_VIEW_FAST_TILE_TABLE_P3:
+    DW   _V_TILE_GRASS+24,_V_TILE_WATER+24,_V_TILE_WALL+24,_V_TILE_ROAD+24,_V_TILE_GOAL+24
+DRAW_MAP_VIEW_FAST_SAVE:
+    DB   0
+DRAW_MAP_VIEW_FAST_BLOCK:
+    DB   0
+DRAW_MAP_VIEW_FAST_VIEW_X:
+    DB   0
+DRAW_MAP_VIEW_FAST_VIEW_Y:
+    DB   0
+DRAW_MAP_VIEW_FAST_ROW_COUNT:
+    DB   0
+DRAW_MAP_VIEW_FAST_COL_COUNT:
+    DB   0
+DRAW_MAP_VIEW_FAST_TABLE:
+    DW   0
+DRAW_MAP_VIEW_FAST_MAP_ROW:
+    DW   0
+DRAW_MAP_VIEW_FAST_MAP_PTR:
+    DW   0
+DRAW_MAP_VIEW_FAST_DEST_ROW:
+    DW   0
+DRAW_MAP_VIEW_FAST_DEST_PTR:
+    DW   0
+DRAW_MAP_VIEW_FAST_END:
+    #END
+}
+MAIN()
+VAR KEY, VIEW_X, VIEW_Y, REDRAW;
+{
+    IOCS_INITSCREEN();
+    IOCS_GINIT(320,200,16);
+    IOCS_VIEW(0,0,319,199);
+    IOCS_SCREEN_INPUT_PAGE(0);
+    IOCS_CLS(0);
+    IOCS_SCREEN320(0,0);
+
+    PRINT("VRAM MAP MOVE",/);
+    PRINT("2/4/6/8:MOVE  ESC:EXIT",/);
+
+    VIEW_X = 0;
+    VIEW_Y = 0;
+    REDRAW = 1;
+    KEY = 0;
+
+    DRAW_MAP_VIEW_FAST(VIEW_X, VIEW_Y);
+
+    WHILE (KEY != 27) {
+        KEY = INKEY(0);
+        IF (KEY == '4') {
+            IF (VIEW_X > 0) {
+                VIEW_X = VIEW_X - 1;
+                MZ25_VRAM_SHIFT_RECT_RIGHT8(0, 10, 40, 20, 96);
+                DRAW_MAP_COL(0, 10, 40, VIEW_X, VIEW_Y, 0);
+            }
+        }
+        IF (KEY == '6') {
+            IF (VIEW_X < 12) {
+                VIEW_X = VIEW_X + 1;
+                MZ25_VRAM_SHIFT_RECT_LEFT8(0, 10, 40, 20, 96);
+                DRAW_MAP_COL(0, 10, 40, VIEW_X, VIEW_Y, 19);
+            }
+        }
+        IF (KEY == '8') {
+            IF (VIEW_Y > 0) {
+                VIEW_Y = VIEW_Y - 1;
+                MZ25_VRAM_SHIFT_RECT_DOWN8(0, 10, 40, 20, 96);
+                DRAW_MAP_ROW(0, 10, 40, VIEW_X, VIEW_Y, 0);
+            }
+        }
+        IF (KEY == '2') {
+            IF (VIEW_Y < 12) {
+                VIEW_Y = VIEW_Y + 1;
+                MZ25_VRAM_SHIFT_RECT_UP8(0, 10, 40, 20, 96);
+                DRAW_MAP_ROW(0, 10, 40, VIEW_X, VIEW_Y, 11);
+            }
+        }
+    }
+}

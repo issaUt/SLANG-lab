@@ -7,7 +7,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## 構成
 
 - `docs/`
-  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順、`docs/MZ2500-IOCS-FLOAT.md` に MZ-2500 IOCS 浮動小数点調査メモ、`docs/MZ2500-IOCS-GFX.md` に MZ-2500 IOCS グラフィック調査メモを記録しています。
+  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順、`docs/MZ2500-IOCS-FLOAT.md` に MZ-2500 IOCS 浮動小数点調査メモ、`docs/MZ2500-IOCS-GFX.md` に MZ-2500 IOCS グラフィック調査メモ、`docs/MZ2500-VRAM-GFX.md` に MZ-2500 VRAM直接操作と8x8タイルマップのメモを記録しています。
 
 - `examples/`
   SLANG の実用サンプル。機種依存や必要ライブラリがある場合は README やソース内コメントに記載します。
@@ -26,6 +26,9 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 - `lib/fixedpoint/`
   16bit 符号付き固定小数点ライブラリです。2D/3D の回転、三角関数、簡易 `atan2` などを含みます。
 
+- `lib/MZ25VRAM_GFX.LIB`
+  MZ-2500 320x200x16色向けのVRAM直接操作ライブラリです。8x8タイル描画、8ドット単位の矩形スクロール/シフトを含みます。
+
 ## examples 配置
 
 - `examples/iocs/`
@@ -40,6 +43,9 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 - `examples/fixedpoint/`
   固定小数点ライブラリ単体、および固定小数点を使ったデモです。
 
+- `examples/graph/`
+  MZ-2500 VRAM直接操作ライブラリの動作確認サンプルです。8x8タイル描画、固定タイルマップ、上下左右へ移動できるタイルマップ、矩形スクロール/シフトの確認コードを置いています。
+
 ## include パスについて
 
 このリポジトリ内のサンプルは、基本的に各 `examples/*/` ディレクトリでビルドする前提で、`../../lib/...` を直接 `#include` しています。
@@ -52,7 +58,8 @@ VSCode で `.LIB` を SLANG として開きたい場合は、ワークスペー�
 {
   "files.associations": {
     "MZ25IOCS_*.LIB": "slang",
-    "FIXEDPOINT.LIB": "slang"
+    "FIXEDPOINT.LIB": "slang",
+    "MZ25VRAM_GFX.LIB": "slang"
   }
 }
 ```

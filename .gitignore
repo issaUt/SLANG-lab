@@ -2,9 +2,11 @@
 *.ASM
 *.LST
 *.SYM
+*.sym
 *.bin
 *.d88
 *.D88
+*.obj
 
 # Packaged VSCode extension artifacts
 *.vsix

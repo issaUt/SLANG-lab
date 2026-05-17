@@ -119,31 +119,13 @@ IOCS_INITSCREEN()
     #END
 }
 
-// 描画ページと表示ページを切り替える。
-// 今のところ 0/1 画面のみ対応。
-// GI: 描画対象ページ、GO: 表示ページ。
-IOCS_SCREEN(BYTE GI, BYTE GO)
+// SVC_SCREN を直接呼び出す。
+// FUNC: A レジスタに渡す機能番号。
+// VALUE: HL レジスタに渡す値。
+IOCS_SCREEN_RAW(BYTE FUNC, WORD VALUE)
 {
-    // 描画対象ページを設定する。
-    ^A = 0;
-    if (GI == 0) {
-        ^HL = 0;
-    } else {
-        ^HL = GI;
-    }
-    #ASM
-    LD  A,(_A);
-    LD  HL,(_HL);
-    SVC SVC_SCREN;
-    #END
-
-    // 表示ページを設定する。
-    ^A = 1;
-    if (GO == 0) {
-        ^HL = 00000010b;
-    } else {
-        ^HL = 00000101b;
-    }
+    ^A = FUNC;
+    ^HL = VALUE;
     #ASM
     LD  A,(_A)
     LD  HL,(_HL)
@@ -151,6 +133,95 @@ IOCS_SCREEN(BYTE GI, BYTE GO)
     #END
 }
 
+// 描画先の入力ページを指定する。
+// 320x200x16色では 0..3、640x200x16色では 0..1 を想定する。
+IOCS_SCREEN_INPUT_PAGE(BYTE PAGE)
+{
+    ^A = 0;
+    ^HL = PAGE;
+    #ASM
+    LD  A,(_A)
+    LD  HL,(_HL)
+    LD  H,0
+    SVC SVC_SCREN
+    #END
+}
+
+// 出力ページ指定用の表示フラグを直接指定する。
+// A=1, L=FLAGS として SVC_SCREN を呼び出す。
+// 640x200x16色では FLAGS=$02/$05 で 0/1 画面を切り替えられることを確認済み。
+IOCS_SCREEN_OUTPUT_FLAGS(BYTE FLAGS)
+{
+    ^A = 1;
+    ^HL = FLAGS;
+    #ASM
+    LD  A,(_A)
+    LD  HL,(_HL)
+    LD  H,0
+    SVC SVC_SCREN
+    #END
+}
+
+// 640x200x16色向けの出力ページを指定する。
+// PAGE=0 で第0画面、PAGE!=0 で第1画面を表示する。
+IOCS_SCREEN_OUTPUT_PAGE640(BYTE PAGE)
+{
+    IF (PAGE == 0) {
+        IOCS_SCREEN_OUTPUT_FLAGS(00000010b);
+    } ELSE {
+        IOCS_SCREEN_OUTPUT_FLAGS(00000101b);
+    }
+}
+
+// 320x200x16色向けの出力ページを指定する。
+// BASICの処理では PAGE=0..3 に対して FLAGS=$02,$04,$03,$05 を指定している。
+IOCS_SCREEN_OUTPUT_PAGE320(BYTE PAGE)
+{
+    CASE PAGE OF {
+        0: IOCS_SCREEN_OUTPUT_FLAGS(00000010b);
+        1: IOCS_SCREEN_OUTPUT_FLAGS(00000100b);
+        2: IOCS_SCREEN_OUTPUT_FLAGS(00000011b);
+        3: IOCS_SCREEN_OUTPUT_FLAGS(00000101b);
+        OTHERS: IOCS_SCREEN_OUTPUT_FLAGS(00000010b);
+    }
+}
+
+// 320x200x16色向けの出力ページ組を指定する。
+// BASICの処理では GROUP=0 が 0/1 画面組、GROUP!=0 が 2/3 画面組に対応する。
+IOCS_SCREEN_OUTPUT_GROUP320(BYTE GROUP)
+{
+    IF (GROUP == 0) {
+        IOCS_SCREEN_OUTPUT_FLAGS(00000110b);
+    } ELSE {
+        IOCS_SCREEN_OUTPUT_FLAGS(00000111b);
+    }
+}
+// 描画ページと表示ページを切り替える。
+// 640x200x16色の 0/1 画面切り替え向け。
+// GI: 描画対象ページ、GO: 表示ページ。
+IOCS_SCREEN(BYTE GI, BYTE GO)
+{
+    IOCS_SCREEN_INPUT_PAGE(GI);
+    IOCS_SCREEN_OUTPUT_PAGE640(GO);
+}
+
+// 描画ページと表示ページを切り替える。
+// 320x200x16色の 0..3 画面切り替え向け。
+// GI: 描画対象ページ、GO: 表示ページ。
+IOCS_SCREEN320(BYTE GI, BYTE GO)
+{
+    IOCS_SCREEN_INPUT_PAGE(GI);
+    IOCS_SCREEN_OUTPUT_PAGE320(GO);
+}
+
+// 描画ページと重ね合わせ表示グループを切り替える。
+// 320x200x16色向け。GROUP=0 で 0/1 画面組、GROUP!=0 で 2/3 画面組を表示する。
+// GI: 描画対象ページ、GROUP: 表示ページ組。
+IOCS_SCREEN320_GROUP(BYTE GI, BYTE GROUP)
+{
+    IOCS_SCREEN_INPUT_PAGE(GI);
+    IOCS_SCREEN_OUTPUT_GROUP320(GROUP);
+}
 // グラフィック画面を指定色で消去する。
 IOCS_CLS(BYTE C)
 {
