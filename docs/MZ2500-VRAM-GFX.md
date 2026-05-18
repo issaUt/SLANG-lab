@@ -15,13 +15,13 @@ MZ-2500 の 320x200x16色グラフィックを、IOCS の描画コールでは�
 
 320x200x16色では、1ページは 4プレーン x 8000バイトです。
 
-現在の実装では、ブロック配置を次のように扱います。
+確認したブロック配置は、0/1ページ組、2/3ページ組の中で色プレーンごとにページが交互に並ぶ形です。
 
 ```text
-plane0: page0=$20 page1=$21 page2=$22 page3=$23
-plane1: page0=$24 page1=$25 page2=$26 page3=$27
-plane2: page0=$28 page1=$29 page2=$2A page3=$2B
-plane3: page0=$2C page1=$2D page2=$2E page3=$2F
+page0: B=$20 R=$22 G=$24 I=$26
+page1: B=$21 R=$23 G=$25 I=$27
+page2: B=$28 R=$2A G=$2C I=$2E
+page3: B=$29 R=$2B G=$2D I=$2F
 ```
 
 各プレーン内は `1ライン40バイト x 200ライン` の連続配置です。
@@ -29,10 +29,7 @@ plane3: page0=$2C page1=$2D page2=$2E page3=$2F
 プレーンの意味は MZ-2500 の 16色グラフィックとして、次の順で扱います。
 
 ```text
-plane0 = B
-plane1 = R
-plane2 = G
-plane3 = I
+B, R, G, I
 ```
 
 つまり色番号のビット対応は次の通りです。
@@ -43,6 +40,8 @@ bit1 = R
 bit2 = G
 bit3 = I
 ```
+
+この配置は `VRAMPLANETEST.SL` と `VRAMPAGETEST.SL` で確認しました。
 
 ## 8x8タイル形式
 
@@ -121,6 +120,36 @@ MZ25_VRAM_SHIFT_RECT_DOWN8(PAGE, XBYTE, Y, WBYTE, H);
 上下移動: 20タイル + 矩形シフト
 ```
 
+## 4ドット単位スクロール
+
+`examples/graph/VRAMMAPSHIFT4.SL` は、8x8タイルマップを4ドット単位で上下左右へ移動するサンプルです。
+
+横方向はVRAM上のビットシフト、縦方向は4ライン単位の移動を使います。空いた端は、タイルデータから4x4ドット分だけを補充します。
+
+`VRAMMAPSHIFT4_2P.SL` は、同じ処理を B/R の2プレーンだけに限定した高速版です。4プレーン版より表現力は落ちますが、処理量を減らせます。
+
+## ページ切り替え版MAPSHIFT
+
+`VRAMMAPSHIFT4_DB.SL` と `VRAMMAPSHIFT4_2P_DB.SL` は、ページ切り替えを使って描画中の作業を見せないようにした版です。
+
+処理の流れは次の通りです。
+
+```text
+1. 表示中ページのマップ矩形を作業ページへコピー
+2. 作業ページ上で4ドットスクロール
+3. 空いた端だけタイルで補充
+4. 作業ページを表示ページへ切り替え
+```
+
+ページ間コピーには `MZ25_VRAM_COPY_RECT` / `MZ25_VRAM_COPY_RECT_2P` を使います。これらはメモリマップレジスタ1を読み元、メモリマップレジスタ2を書き先として、2つのVRAMブロックを同時にZ80アドレス空間へ見せる前提で実装しています。
+
+```text
+2000H-3FFFH: 読み元VRAMブロック
+4000H-5FFFH: 書き先VRAMブロック
+```
+
+これにより、ページ間の矩形コピーを `LDIR` ベースで行えます。
+
 ## サンプル
 
 `examples/graph/` には次のサンプルがあります。
@@ -136,6 +165,27 @@ MZ25_VRAM_SHIFT_RECT_DOWN8(PAGE, XBYTE, Y, WBYTE, H);
 
 - `VRAMMAPMOVE.SL`
   - 広いマップから表示範囲を切り出し、上下左右へ8ドット単位で移動するサンプルです。
+
+- `VRAMSHIFT4TEST.SL`
+  - 4ドット単位の横シフト確認用です。
+
+- `VRAMPLANETEST.SL`
+  - BRGIプレーン順の確認用です。
+
+- `VRAMPAGETEST.SL`
+  - 0..3ページのVRAMブロック配置確認用です。
+
+- `VRAMMAPSHIFT4.SL`
+  - 4プレーンで4ドット単位タイルマップスクロールを行うサンプルです。
+
+- `VRAMMAPSHIFT4_2P.SL`
+  - B/Rの2プレーンだけで4ドット単位タイルマップスクロールを行う高速版です。
+
+- `VRAMMAPSHIFT4_DB.SL`
+  - ページ切り替えとVRAM矩形コピーを使った4プレーンMAPSHIFTです。
+
+- `VRAMMAPSHIFT4_2P_DB.SL`
+  - ページ切り替えとVRAM矩形コピーを使った2プレーンMAPSHIFTです。
 
 ## ビルド例
 
