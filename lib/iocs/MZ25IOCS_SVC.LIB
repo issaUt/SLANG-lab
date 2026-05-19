@@ -55,6 +55,29 @@ VAR BYTE A;
     #END
 }
 
+//
+//  MODE: 各ビットを立てると、その色が文字より上になる。
+//        グラフィックすべてを上にしたい場合 $FFFF
+//
+IOCS_PRIORITY(WORD MODE)
+VAR BYTE GM;
+VAR BYTE BUF[8];
+VAR WORD WBUF[];
+{
+    GM = 0;  // 今の所未使用
+    WBUF=BUF;
+    WBUF[0] = MODE;
+    BUF[2] = GM;
+    ^HL = BUF;
+
+    // SCF ... Cy=1
+    #ASM
+    OR A
+    LD HL, (_HL)
+    SVC SVC_PRI
+    #END
+}
+
 // グラフィック描画範囲を設定する。
 IOCS_VIEW(WORD X1, WORD Y1, WORD X2, WORD Y2)
 VAR BYTE BUF[12];
@@ -430,7 +453,7 @@ VAR WORD WBUF[];
 // 境界色数: BC
 // 単色塗りつぶし色: C
 IOCS_PAINT(WORD X, WORD Y, WORD B[], BYTE BC, BYTE C)
-VAR BYTE BUF[12];
+VAR BYTE BUF[11];
 VAR WORD WBUF[];
 {
     WBUF = &BUF[0];
@@ -678,6 +701,24 @@ IOCS_HROLL(BYTE MODE, WORD Y)
     #END
 }
 
+// 文字を１文字表示する
+IOCS_CRT1C(BYTE C)
+{
+    ^A = C;
+    #ASM
+    LD  A,(_A)
+    SVC SVC_CRT1C
+    #END
+}
+
+// 改行する
+IOCS_CR1()
+{
+    #ASM
+    SVC SVC_CR1
+    #END
+}
+
 // 文字列を表示する。
 // S は 0 終端文字列を指す BYTE 間接変数。
 IOCS_CRTMS(BYTE S[])
@@ -690,16 +731,17 @@ IOCS_CRTMS(BYTE S[])
 }
 
 
-// 8x8ドットPCGパターンを定義する。
+// 8x8ドットPCGパターンを1面分定義する。
 // CH: 1バイト文字コード。BASIC の DEF CHR$(64) なら $40 を指定する。
-// SEL: PCGセレクト番号。IOCS仕様では 0..3。
-// DATA: 1文字分の24バイトデータ。B面8バイト、R面8バイト、G面8バイトの順。
+// SEL: PCGセレクト番号。カラーPCGでは 1=B, 2=R, 3=G として使う。
+// DATA: 1面分の8バイトデータ。
 // SPCG はパターンを DIRARE($1000-) から読むため、先に MEM[$1000+I] へコピーする。
+// IOCS側の処理は SEL 指定先へ8バイトだけコピーする。
 // 8x16ドットPCGは文字コードが $0100..$01FE になるため、別関数として扱う予定。
 IOCS_SPCG8(BYTE CH, BYTE SEL, BYTE DATA[])
 VAR BYTE I;
 {
-    FOR I = 0 TO 23 {
+    FOR I = 0 TO 7 {
         MEM[$1000 + I] = DATA[I];
     }
 
@@ -712,6 +754,26 @@ VAR BYTE I;
     SVC SVC_SPCG
     #END
 }
+
+/*
+// PCGデータ定義例。
+// BASIC の hexchr$("8DAD...") は、2桁ずつ BYTE 配列に展開して持つ。
+// 文字列ではなく BYTE 配列にすることで、$00 を含むパターンも安全に扱える。
+VAR BYTE PCG_64_B[8] = {
+    $8D,$AD,$AD,$AD,$AD,$AD,$AD,$AD
+};
+VAR BYTE PCG_64_R[8] = {
+    $00,$00,$04,$0C,$0C,$0C,$0C,$08
+};
+VAR BYTE PCG_64_G[8] = {
+    $00,$01,$81,$84,$8D,$0D,$8D,$88
+};
+
+// カラーPCG使用例:
+// IOCS_SPCG8($40, 1, PCG_64_B);
+// IOCS_SPCG8($40, 2, PCG_64_R);
+// IOCS_SPCG8($40, 3, PCG_64_G);
+*/
 
 IOCS_LOCATE(BYTE X, BYTE Y)
 VAR WORD XY;
@@ -734,16 +796,255 @@ VAR BYTE BUF[];
     POS[1] = BUF[1];
 }
 
-/*
-// PCGデータ定義例。
-// BASIC の hexchr$("8DAD...") は、2桁ずつ BYTE 配列に展開して持つ。
-// 文字列ではなく BYTE 配列にすることで、$00 を含むパターンも安全に扱える。
-VAR BYTE PCG_64[24] = {
-    $8D,$AD,$AD,$AD,$AD,$AD,$AD,$AD,    // B plane
-    $00,$00,$04,$0C,$0C,$0C,$0C,$08,    // R plane
-    $00,$01,$81,$84,$8D,$0D,$8D,$88     // G plane
-};
 
-// 使用例:
-// IOCS_SPCG8($40, 0, PCG_64);
-*/
+// テキスト画面を初期化する。
+// IOCS TINIT をそのまま呼び出す。
+// TYPE = 0
+//    MODE: b4=0 ... 通常スクロール
+//          b4=1 ... スムーススクロール
+//          b3=0 ... 8x8フォント
+//          b2=1 ... 8x16フォント
+//          b2.b1=00 ... 25行
+//          b2.b1=01 ... 20行
+//          b2.b1=10 ... 12行
+//          b0=0 ... 80桁(幅)
+//          b0=1 ... 40桁(幅)
+// TYPE = 1
+//    MODE = 0 ... 8色モード
+//    MODE = 1 ... 256色モード
+//
+IOCS_TINIT(BYTE TYPE, BYTE MODE)
+{
+    ^A = MODE;
+
+    IF (TYPE == 0) {
+        #ASM
+        OR  A
+        LD  A,(_A)
+        SVC SVC_TINIT
+        #END
+        RETURN;
+    }
+    #ASM
+    LD A,(_A)
+    SCF  ; Cy=1
+    SVC SVC_TINIT
+    #END
+}
+
+// テキスト画面モードを設定する。
+// TYPE = 0: MODE = 0 ... KMODE=0: セミグラフィック
+//           MODE = 1 ... KMODE=1: S-JIS
+// TYPE = 1: MODE = 0 ... KLIST=0: 最下層ファンクションキー非表示
+//           MODE = 1 ... KLIST=1: ファンクションキー表示
+//           MODE = 2 ... KLIST=2: ファンクションキー, 時計表示
+// TYPE = 2: MODE = 0 ... 常にカーソルを消す
+//           MODE = 1 ... 常にカーソルをつける
+//           MODE = 2 ... キー入力時のみカーソルを付ける
+// TYPE = 3: MODE = 0 ... スクロール可能
+//           MODE = 1 ... スクロール禁止
+// TYPE = 4: MODE = 0 ... 文字の背景色透明
+//           MODE = 1 ... 文字の背景色黒
+// TYPE = 5: MODE = 0 ... モノクロディスプレイ表示
+//           MODE = 1 ... モノクロディスプレイ反転表示
+// TYPE = 6: MODE = 0 ... Cy+MODE の9bitでカラー0の実表示色を指定
+// TYPE = 7: MODE = 0 ... モノクロディスプレイにグラフィックも表示
+//           MODE = 1 ... モノクロディスプレイは文字のみ表示
+IOCS_TMOD(BYTE TYPE, BYTE MODE)
+{
+    ^BC = TYPE;
+    ^A = MODE;
+    #ASM
+    LD  BC,(_BC);
+    LD  A,(_A)
+    SVC SVC_TMOD
+    #END
+}
+
+//
+//  PI: 入力ページ指定 0/1
+//      0 ... ページ0
+//      1 ... ページ1
+//  PO: 出力ページ指定 0/1/2
+//      0 ... ページ0
+//      1 ... ページ1
+//      2 ... ページ0/1合成
+IOCS_TSCREEN(BYTE PI, BYTE PO)
+VAR BYTE VAL;
+{
+    VAL = 0;
+    IF (PI == 0) {
+        VAL = 1;
+    } ELSE {
+        VAL = 2;
+    }
+
+    CASE PO OF {
+        0: VAL = VAL OR 00100b;
+        1: VAL = VAL OR 01000b;
+        2: VAL = VAL OR 01100b;
+    }
+
+    IOCS_TSCRN(VAL);
+}
+
+// テキスト画面表示状態を設定する。
+// MODE: b1b0=00 ... アクセスページは変更しない
+//       b1b0=01 ... ページ0をアクセス
+//       b1b0=10 ... ページ1をアクセス
+//       b3b2=00 ... 表示ページは変更しない
+//       b3b2=01 ... ページ0のみ表示
+//       b3b2=10 ... ページ1のみ表示
+//       b3b2=11 ... ページ0>ページ1で合成表示
+IOCS_TSCRN(BYTE MODE)
+{
+    ^A = MODE;
+    #ASM
+    LD  A,(_A)
+    SVC SVC_TSCRN
+    #END
+}
+
+// テキスト属性を設定する。
+// MODE = 0: ATRの色（64色系）に変更
+// MODE = 1: ATR==0 ... ブリンク解除
+//           ATR<>1 ... ブリンク
+// MODE = 2:  ATR==0 ... リバース解除
+//           ATR<>1 ... リバース
+//
+// SX: 開始座標X
+// SY: 開始座標Y
+// LX: X長さ
+// LY: Y長さ
+//
+IOCS_TATR(BYTE MODE, BYTE SX, BYTE SY, BYTE LX, BYTE LY, BYTE ATR)
+VAR WORD XY, L;
+{
+    ^BC = MODE;
+    ^A = ATR;
+
+    XY = SY << 8;
+    XY = XY OR SX;
+    ^HL = XY;
+
+    L = LY << 8;
+    L = L OR LX;
+    ^DE = L;
+
+    #ASM
+    LD  A,(_A)
+    LD  BC,(_BC)
+    LD  HL,(_HL)
+    LD  DE,(_DE)
+    SVC SVC_TATR
+    #END
+}
+
+//
+// これから表示するテキストの色と属性を設定する。
+// $05F4/$05F6 に文字色、$05F5/$05F7 に属性を直接指定する。
+// COLOR: b2b1b0 の文字色。001=青, 010=赤, 100=緑。組み合わせ指定可。
+// ATR: b7=ブリンク, b6=リバース, b5b4=00通常/01 PCG1/10 PCG2/11 PCG3, b3=モノクロ用。
+IOCS_SETTCOLOR(BYTE COLOR, BYTE ATR)
+{
+    MEM[$05F4] = COLOR;
+    MEM[$05F6] = COLOR;
+    MEM[$05F5] = ATR;
+    MEM[$05F7] = ATR;
+}
+
+
+// テキスト画面幅を設定する。
+// WIDTH: b0=0 ... 80桁
+//        b0=1 ... 40桁
+//        b2b1=00 ... 25行
+//        b2b1=01 ... 20行
+//        b2b1=10 ... 12行
+IOCS_TWID(BYTE WIDTH)
+{
+    ^A = WIDTH;
+    #ASM
+    LD  A,(_A)
+    SVC SVC_TWID
+    #END
+}
+
+// テキスト画面をクリアする。
+// A=0 として IOCS TCLR を呼び出す。
+IOCS_TCLR()
+{
+    ^A = 0;
+    #ASM
+    LD  A,(_A)
+    SVC SVC_TCLR
+    #END
+}
+
+// テキスト画面クリアを直接呼び出す。
+// MODE の意味は IOCS 側仕様確認中。A=MODE として呼び出す薄いラッパー。
+IOCS_TCLR_RAW(BYTE MODE)
+{
+    ^A = MODE;
+    #ASM
+    LD  A,(_A)
+    SVC SVC_TCLR
+    #END
+}
+
+// テキスト画面をスクロールする。
+// DIR == 0 ... 上方向にスクロール
+// DIR <> 0 ... 下方向にスクロール
+IOCS_TSCRL(BYTE DIR)
+{
+    ^A = DIR;
+    #ASM
+    LD  A,(_A)
+    SVC SVC_TSCRL
+    #END
+}
+
+// テキストウィンドウを設定する CONSOLE 相当
+// SX ... 開始X位置
+// SY ... 開始Y位置
+// LX ... X方向長さ
+// LY ... Y方向長さ
+IOCS_TWARE(BYTE SX, BYTE SY, BYTE LX, BYTE LY)
+VAR WORD XY, L;
+{
+    XY = SY << 8;
+    XY = XY OR SX;
+    ^HL = XY;
+
+    L = LY << 8;
+    L = L OR LX;
+    ^DE = L;
+
+    #ASM
+    LD  HL,(_HL)
+    LD  DE,(_DE)
+    SVC SVC_TWARE
+    #END
+}
+
+// ハードウェアテキスト表示領域を設定する。CONSOLE@相当
+// SX ... 開始X位置
+// SY ... 開始Y位置
+// LX ... X方向長さ
+// LY ... Y方向長さ
+IOCS_TDARE(BYTE SX, BYTE SY, BYTE LX, BYTE LY)
+VAR WORD XY, L;
+{
+    XY = SY << 8;
+    XY = XY OR SX;
+    ^HL = XY;
+
+    L = LY << 8;
+    L = L OR LX;
+    ^DE = L;
+
+    #ASM
+    LD  HL,(_HL)
+    LD  DE,(_DE)
+    SVC SVC_TDARE
+    #END
+}

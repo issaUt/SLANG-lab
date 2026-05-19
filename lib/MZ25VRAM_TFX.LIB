@@ -1,0 +1,1913 @@
+// MZ-2500 TEXT/PCG direct VRAM utility library.
+//
+// This library directly maps and updates MZ-2500 text/attribute/PCG VRAM.
+// It is independent from IOCS SVC calls except that the caller should set
+// an appropriate text mode beforehand.
+//
+// Current target:
+//   40x25 text mode, 8x8 character display
+//
+// Text block $38 mapped at 2000H-3FFFH:
+//   +0000H-07FFH: TEXTVRAM1
+//   +0800H-0FFFH: attribute VRAM
+//   +1000H-17FFH: TEXTVRAM2
+//
+// In 40x25 mode:
+//   page 0 offset = 0 * $0400 + Y * 40 + X
+//   page 1 offset = 1 * $0400 + Y * 40 + X
+// 40x25は1画面1000バイトだが、ページ境界は$0400単位。
+//
+// PCG block $39 mapped at 2000H-3FFFH:
+//   +0800H-0FFFH: PCG1 / B plane
+//   +1000H-17FFH: PCG2 / R plane
+//   +1800H-1FFFH: PCG3 / G plane
+
+// 40x25 text page offsetを計算する。
+MZ25_TEXT_OFFSET40(BYTE PAGE, BYTE X, BYTE Y)
+VAR WORD POS;
+{
+    POS = PAGE * $0400;
+    POS = POS + Y * 40;
+    POS = POS + X;
+    RETURN POS;
+}
+
+// ASCII相当コードをTEXTVRAM1/2用の通常ROM文字指定値に変換し、DEへ設定する。
+// IOCSのSVC_CRT1C内の通常1バイト文字変換(X4C27相当)に合わせる。
+MZ25_TEXT_ROM_DE(BYTE C)
+{
+    ^A = C;
+    #ASM
+    LD   A,(_A)
+    LD   H,23H
+    SLA  A
+    RL   H
+    SLA  A
+    RL   H
+    LD   L,A
+    SET  1,L
+    LD   (_DE),HL
+    #END
+}
+
+// 40x25の指定座標へ文字と属性を書き込む。
+// ATTR b3=1 でカラーPCGモード。b2-b0 は色指定。
+// ATTR b3=0 で通常文字/属性表示。
+MZ25_TEXT_PUT40(BYTE PAGE, BYTE X, BYTE Y, BYTE C, BYTE ATTR)
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+
+    ^HL = POS;
+    ^A = C;
+    ^BC = ATTR;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_PUT40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   A,(_BC)
+    AND  08H
+    JR   Z,MZ25_TEXT_PUT40_ROM
+    LD   A,(_A)
+    LD   E,A
+    LD   D,0
+    JR   MZ25_TEXT_PUT40_STORE
+
+MZ25_TEXT_PUT40_ROM:
+    LD   A,(_A)
+    LD   H,23H
+    SLA  A
+    RL   H
+    SLA  A
+    RL   H
+    LD   L,A
+    SET  1,L
+    LD   D,H
+    LD   E,L
+
+MZ25_TEXT_PUT40_STORE:
+    LD   HL,(_HL)
+    PUSH DE
+    LD   DE,2000H
+    ADD  HL,DE
+    POP  DE
+    LD   (HL),E
+
+    LD   HL,(_HL)
+    PUSH DE
+    LD   DE,3000H
+    ADD  HL,DE
+    POP  DE
+    LD   (HL),D
+
+    LD   HL,(_HL)
+    LD   DE,2800H
+    ADD  HL,DE
+    LD   A,(_BC)
+    LD   (HL),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_PUT40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_PUT40_END
+
+MZ25_TEXT_PUT40_SAVE:
+    DB   0
+MZ25_TEXT_PUT40_END:
+    #END
+}
+
+// 40x25の指定座標へ文字のみを書き込む。属性は変更しない。
+MZ25_TEXT_PUT40_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE C)
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+
+    ^HL = POS;
+    ^A = C;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_PUT40_NA_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   A,(_A)
+    LD   H,23H
+    SLA  A
+    RL   H
+    SLA  A
+    RL   H
+    LD   L,A
+    SET  1,L
+    LD   D,H
+    LD   E,L
+
+    LD   HL,(_HL)
+    PUSH DE
+    LD   DE,2000H
+    ADD  HL,DE
+    POP  DE
+    LD   (HL),E
+
+    LD   HL,(_HL)
+    PUSH DE
+    LD   DE,3000H
+    ADD  HL,DE
+    POP  DE
+    LD   (HL),D
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_PUT40_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_PUT40_NA_END
+
+MZ25_TEXT_PUT40_NA_SAVE:
+    DB   0
+MZ25_TEXT_PUT40_NA_END:
+    #END
+}
+
+// 40x25の指定範囲の属性だけを一括設定する。
+MZ25_TEXT_ATTR_RECT40(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE ATTR)
+VAR BYTE ROW;
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    ^HL = POS;
+    ^DE = W;
+    ^BC = H;
+    ^A = ATTR;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_ATTR_RECT40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   HL,(_HL)
+    LD   DE,2800H
+    ADD  HL,DE
+    LD   A,(_BC)
+    LD   B,A
+MZ25_TEXT_ATTR_RECT40_ROW:
+    PUSH BC
+    PUSH HL
+    LD   B,0
+    LD   A,(_DE)
+    LD   C,A
+    LD   A,(_A)
+MZ25_TEXT_ATTR_RECT40_COL:
+    LD   (HL),A
+    INC  HL
+    DEC  C
+    JR   NZ,MZ25_TEXT_ATTR_RECT40_COL
+    POP  HL
+    LD   DE,40
+    ADD  HL,DE
+    POP  BC
+    DJNZ MZ25_TEXT_ATTR_RECT40_ROW
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_ATTR_RECT40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_ATTR_RECT40_END
+
+MZ25_TEXT_ATTR_RECT40_SAVE:
+    DB   0
+MZ25_TEXT_ATTR_RECT40_END:
+    #END
+}
+
+// 40x25のページ全体を指定文字・属性でクリアする。
+MZ25_TEXT_CLEAR40(BYTE PAGE, BYTE C, BYTE ATTR)
+{
+    MZ25_TEXT_CLEAR_RECT40(PAGE, 0, 0, 40, 25, C, ATTR);
+}
+
+// 40x25の指定範囲を指定文字・属性でクリアする。
+MZ25_TEXT_CLEAR_RECT40(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE C, BYTE ATTR)
+VAR BYTE ROW,COL;
+{
+    FOR ROW = 0 TO H - 1 {
+        FOR COL = 0 TO W - 1 {
+            MZ25_TEXT_PUT40(PAGE, X + COL, Y + ROW, C, ATTR);
+        }
+    }
+}
+
+// PCGブロック$39から8x8 PCGを1面分読む。
+// SEL: 1=B, 2=R, 3=G。
+MZ25_PCG_READ8(BYTE C, BYTE SEL, BYTE OUT[])
+VAR WORD POS;
+{
+    POS = C * 8;
+    IF (SEL == 1) {
+        POS = POS + $0800;
+    } ELSE {
+        IF (SEL == 2) {
+            POS = POS + $1000;
+        } ELSE {
+            POS = POS + $1800;
+        }
+    }
+
+    ^HL = POS;
+    ^DE = OUT;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_PCG_READ8_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,39H
+    OUT  (0B5H),A
+
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   DE,(_DE)
+    LD   BC,8
+    LDIR
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_PCG_READ8_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_PCG_READ8_END
+
+MZ25_PCG_READ8_SAVE:
+    DB   0
+MZ25_PCG_READ8_END:
+    #END
+}
+
+// PCGブロック$39へ8x8 PCGを1面分直接書き込む。
+// SEL: 1=B, 2=R, 3=G。
+MZ25_PCG_SET8_PLANE(BYTE C, BYTE SEL, BYTE DATA[])
+VAR WORD POS;
+{
+    POS = C * 8;
+    IF (SEL == 1) {
+        POS = POS + $0800;
+    } ELSE {
+        IF (SEL == 2) {
+            POS = POS + $1000;
+        } ELSE {
+            POS = POS + $1800;
+        }
+    }
+
+    ^HL = POS;
+    ^DE = DATA;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_PCG_SET8_PLANE_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,39H
+    OUT  (0B5H),A
+
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    EX   DE,HL
+    LD   HL,(_DE)
+    LD   BC,8
+    LDIR
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_PCG_SET8_PLANE_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_PCG_SET8_PLANE_END
+
+MZ25_PCG_SET8_PLANE_SAVE:
+    DB   0
+MZ25_PCG_SET8_PLANE_END:
+    #END
+}
+
+// カラーPCG 8x8をB/R/Gの3面分まとめて直接定義する。
+MZ25_PCG_SET8(BYTE C, BYTE BDATA[], BYTE RDATA[], BYTE GDATA[])
+{
+    MZ25_PCG_SET8_PLANE(C, 1, BDATA);
+    MZ25_PCG_SET8_PLANE(C, 2, RDATA);
+    MZ25_PCG_SET8_PLANE(C, 3, GDATA);
+}
+
+
+// カラーPCG 8x8を24バイト連結データで直接定義する。
+// DATA[0..7]=B plane, DATA[8..15]=R plane, DATA[16..23]=G plane。
+MZ25_PCG_SET8_DATA(BYTE C, BYTE DATA[])
+{
+    ^A = C;
+    ^HL = DATA;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_PCG_SET8_DATA_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,39H
+    OUT  (0B5H),A
+
+    LD   A,(_A)
+    LD   L,A
+    LD   H,0
+    ADD  HL,HL
+    ADD  HL,HL
+    ADD  HL,HL
+    LD   (MZ25_PCG_SET8_DATA_OFFSET),HL
+
+    LD   HL,(_HL)
+    PUSH HL
+    LD   HL,(MZ25_PCG_SET8_DATA_OFFSET)
+    LD   DE,2800H
+    ADD  HL,DE
+    EX   DE,HL
+    POP  HL
+    LD   BC,8
+    LDIR
+
+    PUSH HL
+    LD   HL,(MZ25_PCG_SET8_DATA_OFFSET)
+    LD   DE,3000H
+    ADD  HL,DE
+    EX   DE,HL
+    POP  HL
+    LD   BC,8
+    LDIR
+
+    PUSH HL
+    LD   HL,(MZ25_PCG_SET8_DATA_OFFSET)
+    LD   DE,3800H
+    ADD  HL,DE
+    EX   DE,HL
+    POP  HL
+    LD   BC,8
+    LDIR
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_PCG_SET8_DATA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_PCG_SET8_DATA_END
+
+MZ25_PCG_SET8_DATA_OFFSET:
+    DW   0
+MZ25_PCG_SET8_DATA_SAVE:
+    DB   0
+MZ25_PCG_SET8_DATA_END:
+    #END
+}
+
+
+// 0終端文字列を40x25指定座標へ属性付きで出力する。
+MZ25_TEXT_PRINT40(BYTE PAGE, BYTE X, BYTE Y, BYTE S[], BYTE ATTR)
+VAR BYTE I,C;
+{
+    I = 0;
+    C = S[I];
+    WHILE (C != 0) {
+        MZ25_TEXT_PUT40(PAGE, X + I, Y, C, ATTR);
+        I = I + 1;
+        C = S[I];
+    }
+}
+
+// 0終端文字列を40x25指定座標へ出力する。属性は変更しない。
+MZ25_TEXT_PRINT40_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE S[])
+VAR BYTE I,C;
+{
+    I = 0;
+    C = S[I];
+    WHILE (C != 0) {
+        MZ25_TEXT_PUT40_NOATTR(PAGE, X + I, Y, C);
+        I = I + 1;
+        C = S[I];
+    }
+}
+
+// 40x25の1セルをTEXTVRAM1/2/属性ごと読む。
+// OUT[0]=TEXTVRAM1, OUT[1]=TEXTVRAM2, OUT[2]=ATTR。
+MZ25_TEXT_READ_CELL40(BYTE PAGE, BYTE X, BYTE Y, BYTE OUT[])
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    ^HL = POS;
+    ^DE = OUT;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_READ_CELL40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   IX,(_DE)
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   A,(HL)
+    LD   (IX+0),A
+
+    LD   HL,(_HL)
+    LD   DE,3000H
+    ADD  HL,DE
+    LD   A,(HL)
+    LD   (IX+1),A
+
+    LD   HL,(_HL)
+    LD   DE,2800H
+    ADD  HL,DE
+    LD   A,(HL)
+    LD   (IX+2),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_READ_CELL40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_READ_CELL40_END
+
+MZ25_TEXT_READ_CELL40_SAVE:
+    DB   0
+MZ25_TEXT_READ_CELL40_END:
+    #END
+}
+
+// 40x25の1セルへTEXTVRAM1/2/属性をそのまま書く。
+// DATA[0]=TEXTVRAM1, DATA[1]=TEXTVRAM2, DATA[2]=ATTR。
+MZ25_TEXT_WRITE_CELL40(BYTE PAGE, BYTE X, BYTE Y, BYTE DATA[])
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    ^HL = POS;
+    ^DE = DATA;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_WRITE_CELL40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   IX,(_DE)
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   A,(IX+0)
+    LD   (HL),A
+
+    LD   HL,(_HL)
+    LD   DE,3000H
+    ADD  HL,DE
+    LD   A,(IX+1)
+    LD   (HL),A
+
+    LD   HL,(_HL)
+    LD   DE,2800H
+    ADD  HL,DE
+    LD   A,(IX+2)
+    LD   (HL),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_WRITE_CELL40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_WRITE_CELL40_END
+
+MZ25_TEXT_WRITE_CELL40_SAVE:
+    DB   0
+MZ25_TEXT_WRITE_CELL40_END:
+    #END
+}
+
+
+// 40x25の指定座標から属性を取得する。
+MZ25_TEXT_GET_ATTR40(BYTE PAGE, BYTE X, BYTE Y)
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    ^HL = POS;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_GET_ATTR40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   HL,(_HL)
+    LD   DE,2800H
+    ADD  HL,DE
+    LD   L,(HL)
+    LD   H,0
+    LD   (_HL),HL
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_GET_ATTR40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_GET_ATTR40_END
+
+MZ25_TEXT_GET_ATTR40_SAVE:
+    DB   0
+MZ25_TEXT_GET_ATTR40_END:
+    #END
+    RETURN ^HL;
+}
+
+// 40x25の指定座標から文字コードを取得する。
+// ATTR b3=1 のカラーPCGセルはTEXTVRAM1をそのまま返す。
+// 通常文字セルはSVC_CRT1C相当のTEXTVRAM1/2値からASCII相当コードへ戻す。
+MZ25_TEXT_GET_CODE40(BYTE PAGE, BYTE X, BYTE Y)
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    ^HL = POS;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_GET_CODE40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   A,(HL)
+    LD   (MZ25_TEXT_GET_CODE40_T1),A
+
+    SET  3,H
+    LD   A,(HL)
+    LD   (MZ25_TEXT_GET_CODE40_ATTR),A
+    RES  3,H
+
+    LD   A,(MZ25_TEXT_GET_CODE40_ATTR)
+    AND  08H
+    JR   Z,MZ25_TEXT_GET_CODE40_ROM
+    LD   A,(MZ25_TEXT_GET_CODE40_T1)
+    LD   L,A
+    LD   H,0
+    JR   MZ25_TEXT_GET_CODE40_STORE
+
+MZ25_TEXT_GET_CODE40_ROM:
+    SET  4,H
+    LD   H,(HL)
+    LD   A,(MZ25_TEXT_GET_CODE40_T1)
+    AND  0FDH
+    LD   L,A
+    LD   DE,8C00H
+    OR   A
+    SBC  HL,DE
+    SRL  H
+    RR   L
+    SRL  H
+    RR   L
+    LD   H,0
+
+MZ25_TEXT_GET_CODE40_STORE:
+    LD   (_HL),HL
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_GET_CODE40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_GET_CODE40_END
+
+MZ25_TEXT_GET_CODE40_T1:
+    DB   0
+MZ25_TEXT_GET_CODE40_ATTR:
+    DB   0
+MZ25_TEXT_GET_CODE40_SAVE:
+    DB   0
+MZ25_TEXT_GET_CODE40_END:
+    #END
+    RETURN ^HL;
+}
+
+// 指定範囲を左へ1セルスクロールする。右端は指定文字・属性で埋める。
+MZ25_TEXT_SCROLL_LEFT40(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C, BYTE FILL_ATTR)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3];
+{
+    FOR ROW = 0 TO H - 1 {
+        FOR COL = 0 TO W - 2 {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL + 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        MZ25_TEXT_PUT40(PAGE, X + W - 1, Y + ROW, FILL_C, FILL_ATTR);
+    }
+}
+
+// 指定範囲を右へ1セルスクロールする。左端は指定文字・属性で埋める。
+MZ25_TEXT_SCROLL_RIGHT40(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C, BYTE FILL_ATTR)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3];
+{
+    FOR ROW = 0 TO H - 1 {
+        COL = W - 1;
+        WHILE (COL != 0) {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL - 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+            COL = COL - 1;
+        }
+        MZ25_TEXT_PUT40(PAGE, X, Y + ROW, FILL_C, FILL_ATTR);
+    }
+}
+
+// 指定範囲を上へ1行スクロールする。下端は指定文字・属性で埋める。
+MZ25_TEXT_SCROLL_UP40(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C, BYTE FILL_ATTR)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3];
+{
+    FOR ROW = 0 TO H - 2 {
+        FOR COL = 0 TO W - 1 {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL, Y + ROW + 1, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+        }
+    }
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_PUT40(PAGE, X + COL, Y + H - 1, FILL_C, FILL_ATTR);
+    }
+}
+
+// 指定範囲を下へ1行スクロールする。上端は指定文字・属性で埋める。
+MZ25_TEXT_SCROLL_DOWN40(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C, BYTE FILL_ATTR)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3];
+{
+    ROW = H - 1;
+    WHILE (ROW != 0) {
+        FOR COL = 0 TO W - 1 {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL, Y + ROW - 1, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        ROW = ROW - 1;
+    }
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_PUT40(PAGE, X + COL, Y, FILL_C, FILL_ATTR);
+    }
+}
+
+
+MZ25_TEXT_READ_CHAR40(BYTE PAGE, BYTE X, BYTE Y, BYTE OUT[])
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    ^HL = POS;
+    ^DE = OUT;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_READ_CHAR40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   IX,(_DE)
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   A,(HL)
+    LD   (IX+0),A
+
+    LD   HL,(_HL)
+    LD   DE,3000H
+    ADD  HL,DE
+    LD   A,(HL)
+    LD   (IX+1),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_READ_CHAR40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_READ_CHAR40_END
+
+MZ25_TEXT_READ_CHAR40_SAVE:
+    DB   0
+MZ25_TEXT_READ_CHAR40_END:
+    #END
+}
+
+MZ25_TEXT_WRITE_CHAR40(BYTE PAGE, BYTE X, BYTE Y, BYTE DATA[])
+VAR WORD POS;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    ^HL = POS;
+    ^DE = DATA;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_WRITE_CHAR40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   IX,(_DE)
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   A,(IX+0)
+    LD   (HL),A
+
+    LD   HL,(_HL)
+    LD   DE,3000H
+    ADD  HL,DE
+    LD   A,(IX+1)
+    LD   (HL),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_WRITE_CHAR40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_WRITE_CHAR40_END
+
+MZ25_TEXT_WRITE_CHAR40_SAVE:
+    DB   0
+MZ25_TEXT_WRITE_CHAR40_END:
+    #END
+}
+
+MZ25_TEXT_SCROLL_LEFT40_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2];
+{
+    FOR ROW = 0 TO H - 1 {
+        FOR COL = 0 TO W - 2 {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL + 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        MZ25_TEXT_PUT40_NOATTR(PAGE, X + W - 1, Y + ROW, FILL_C);
+    }
+}
+
+MZ25_TEXT_SCROLL_RIGHT40_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2];
+{
+    FOR ROW = 0 TO H - 1 {
+        COL = W - 1;
+        WHILE (COL != 0) {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL - 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+            COL = COL - 1;
+        }
+        MZ25_TEXT_PUT40_NOATTR(PAGE, X, Y + ROW, FILL_C);
+    }
+}
+
+MZ25_TEXT_SCROLL_UP40_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2];
+{
+    FOR ROW = 0 TO H - 2 {
+        FOR COL = 0 TO W - 1 {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL, Y + ROW + 1, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+        }
+    }
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_PUT40_NOATTR(PAGE, X + COL, Y + H - 1, FILL_C);
+    }
+}
+
+MZ25_TEXT_SCROLL_DOWN40_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2];
+{
+    ROW = H - 1;
+    WHILE (ROW != 0) {
+        FOR COL = 0 TO W - 1 {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL, Y + ROW - 1, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        ROW = ROW - 1;
+    }
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_PUT40_NOATTR(PAGE, X + COL, Y, FILL_C);
+    }
+}
+
+MZ25_TEXT_SCROLL_LEFT40_LOOP(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3],EDGE[3];
+{
+    FOR ROW = 0 TO H - 1 {
+        MZ25_TEXT_READ_CELL40(PAGE, X, Y + ROW, EDGE);
+        FOR COL = 0 TO W - 2 {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL + 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        MZ25_TEXT_WRITE_CELL40(PAGE, X + W - 1, Y + ROW, EDGE);
+    }
+}
+
+MZ25_TEXT_SCROLL_RIGHT40_LOOP(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3],EDGE[3];
+{
+    FOR ROW = 0 TO H - 1 {
+        MZ25_TEXT_READ_CELL40(PAGE, X + W - 1, Y + ROW, EDGE);
+        COL = W - 1;
+        WHILE (COL != 0) {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL - 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+            COL = COL - 1;
+        }
+        MZ25_TEXT_WRITE_CELL40(PAGE, X, Y + ROW, EDGE);
+    }
+}
+
+MZ25_TEXT_SCROLL_UP40_LOOP(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3],EDGE[3];
+{
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_READ_CELL40(PAGE, X + COL, Y, EDGE);
+        FOR ROW = 0 TO H - 2 {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL, Y + ROW + 1, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + H - 1, EDGE);
+    }
+}
+
+MZ25_TEXT_SCROLL_DOWN40_LOOP(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[3],EDGE[3];
+{
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_READ_CELL40(PAGE, X + COL, Y + H - 1, EDGE);
+        ROW = H - 1;
+        WHILE (ROW != 0) {
+            MZ25_TEXT_READ_CELL40(PAGE, X + COL, Y + ROW - 1, CELL);
+            MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y + ROW, CELL);
+            ROW = ROW - 1;
+        }
+        MZ25_TEXT_WRITE_CELL40(PAGE, X + COL, Y, EDGE);
+    }
+}
+
+MZ25_TEXT_SCROLL_LEFT40_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2],EDGE[2];
+{
+    FOR ROW = 0 TO H - 1 {
+        MZ25_TEXT_READ_CHAR40(PAGE, X, Y + ROW, EDGE);
+        FOR COL = 0 TO W - 2 {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL + 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        MZ25_TEXT_WRITE_CHAR40(PAGE, X + W - 1, Y + ROW, EDGE);
+    }
+}
+
+MZ25_TEXT_SCROLL_RIGHT40_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2],EDGE[2];
+{
+    FOR ROW = 0 TO H - 1 {
+        MZ25_TEXT_READ_CHAR40(PAGE, X + W - 1, Y + ROW, EDGE);
+        COL = W - 1;
+        WHILE (COL != 0) {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL - 1, Y + ROW, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+            COL = COL - 1;
+        }
+        MZ25_TEXT_WRITE_CHAR40(PAGE, X, Y + ROW, EDGE);
+    }
+}
+
+MZ25_TEXT_SCROLL_UP40_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2],EDGE[2];
+{
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_READ_CHAR40(PAGE, X + COL, Y, EDGE);
+        FOR ROW = 0 TO H - 2 {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL, Y + ROW + 1, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+        }
+        MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + H - 1, EDGE);
+    }
+}
+
+MZ25_TEXT_SCROLL_DOWN40_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR BYTE ROW,COL;
+VAR BYTE CELL[2],EDGE[2];
+{
+    FOR COL = 0 TO W - 1 {
+        MZ25_TEXT_READ_CHAR40(PAGE, X + COL, Y + H - 1, EDGE);
+        ROW = H - 1;
+        WHILE (ROW != 0) {
+            MZ25_TEXT_READ_CHAR40(PAGE, X + COL, Y + ROW - 1, CELL);
+            MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y + ROW, CELL);
+            ROW = ROW - 1;
+        }
+        MZ25_TEXT_WRITE_CHAR40(PAGE, X + COL, Y, EDGE);
+    }
+}
+
+
+// RAM上のPCG文字コードマップを40x25テキストVRAMへ一括描画する。
+// MAP[]には$40などのPCG文字コードをそのまま入れる。
+// ATTRは通常カラーPCG用途ではb3=1を含める。例: $1F。
+MZ25_TEXT_DRAW_PCGMAP40(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE MAP[], BYTE ATTR)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+
+    ^HL = POS;
+    ^DE = MAP;
+    ^BC = SIZE;
+    ^A = ATTR;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_DRAW_PCGMAP40_SAVE),A
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   A,(_A)
+    LD   (MZ25_TEXT_DRAW_PCGMAP40_ATTR),A
+
+    LD   IX,(_DE)
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   BC,(_BC)
+
+MZ25_TEXT_DRAW_PCGMAP40_ROW:
+    PUSH BC
+    PUSH HL
+MZ25_TEXT_DRAW_PCGMAP40_COL:
+    LD   A,(IX+0)
+    LD   (HL),A
+    SET  3,H
+    LD   A,(MZ25_TEXT_DRAW_PCGMAP40_ATTR)
+    LD   (HL),A
+    RES  3,H
+    SET  4,H
+    XOR  A
+    LD   (HL),A
+    RES  4,H
+    INC  IX
+    INC  HL
+    DEC  C
+    JR   NZ,MZ25_TEXT_DRAW_PCGMAP40_COL
+    POP  HL
+    LD   DE,40
+    ADD  HL,DE
+    POP  BC
+    DJNZ MZ25_TEXT_DRAW_PCGMAP40_ROW
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_DRAW_PCGMAP40_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_DRAW_PCGMAP40_END
+
+MZ25_TEXT_DRAW_PCGMAP40_ATTR:
+    DB   0
+MZ25_TEXT_DRAW_PCGMAP40_SAVE:
+    DB   0
+MZ25_TEXT_DRAW_PCGMAP40_END:
+    #END
+}
+
+
+// 40x25の指定範囲を左へ1セル高速スクロールする。属性は変更しない。
+// PCG用途を想定し、右端のTEXTVRAM1にFILL_C、TEXTVRAM2に0を書き込む。
+MZ25_TEXT_SCROLL_LEFT40_FAST_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    ^A = FILL_C;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   A,(_A)
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_NA_FILL),A
+    LD   BC,(_BC)
+    LD   A,B
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_NA_ROWS),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+MZ25_TEXT_SCROLL_LEFT40_FAST_NA_ROW:
+    PUSH HL
+    LD   D,H
+    LD   E,L
+    INC  HL
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDIR
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_NA_FILL)
+    LD   (DE),A
+    POP  HL
+
+    PUSH HL
+    SET  4,H
+    LD   D,H
+    LD   E,L
+    INC  HL
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDIR
+    XOR  A
+    LD   (DE),A
+    POP  HL
+
+    LD   DE,40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_LEFT40_FAST_NA_ROW
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_LEFT40_FAST_NA_END
+
+MZ25_TEXT_SCROLL_LEFT40_FAST_NA_FILL: DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_NA_W:    DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_NA_ROWS: DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_NA_SAVE: DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_NA_END:
+    #END
+}
+
+// 40x25の指定範囲を右へ1セル高速スクロールする。属性は変更しない。
+MZ25_TEXT_SCROLL_RIGHT40_FAST_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    ^A = FILL_C;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   A,(_A)
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_FILL),A
+    LD   BC,(_BC)
+    LD   A,B
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_ROWS),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_ROW:
+    PUSH HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_W)
+    DEC  A
+    LD   E,A
+    LD   D,0
+    ADD  HL,DE
+    LD   D,H
+    LD   E,L
+    DEC  HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDDR
+    POP  HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_FILL)
+    LD   (HL),A
+
+    PUSH HL
+    SET  4,H
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_W)
+    DEC  A
+    LD   E,A
+    LD   D,0
+    ADD  HL,DE
+    LD   D,H
+    LD   E,L
+    DEC  HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDDR
+    POP  HL
+    PUSH HL
+    SET  4,H
+    XOR  A
+    LD   (HL),A
+    POP  HL
+
+    LD   DE,40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_ROW
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_END
+
+MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_FILL: DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_W:    DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_ROWS: DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_SAVE: DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_NA_END:
+    #END
+}
+
+// 40x25の指定範囲を上へ1行高速スクロールする。属性は変更しない。
+MZ25_TEXT_SCROLL_UP40_FAST_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    ^A = FILL_C;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   A,(_A)
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_NA_FILL),A
+    LD   BC,(_BC)
+    LD   A,B
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_NA_ROWS),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+MZ25_TEXT_SCROLL_UP40_FAST_NA_ROW:
+    PUSH HL
+    LD   D,H
+    LD   E,L
+    PUSH HL
+    LD   DE,40
+    ADD  HL,DE
+    EX   DE,HL
+    POP  HL
+    EX   DE,HL
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+
+    PUSH HL
+    SET  4,H
+    LD   D,H
+    LD   E,L
+    PUSH HL
+    LD   DE,40
+    ADD  HL,DE
+    EX   DE,HL
+    POP  HL
+    EX   DE,HL
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+
+    LD   DE,40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_UP40_FAST_NA_ROW
+
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_NA_FILL)
+MZ25_TEXT_SCROLL_UP40_FAST_NA_FILL1:
+    LD   (HL),A
+    INC  HL
+    DEC  C
+    JR   NZ,MZ25_TEXT_SCROLL_UP40_FAST_NA_FILL1
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    LD   DE,-1
+    ADD  HL,DE
+    SET  4,H
+    XOR  A
+MZ25_TEXT_SCROLL_UP40_FAST_NA_FILL2:
+    LD   (HL),A
+    DEC  HL
+    DEC  C
+    JR   NZ,MZ25_TEXT_SCROLL_UP40_FAST_NA_FILL2
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_UP40_FAST_NA_END
+
+MZ25_TEXT_SCROLL_UP40_FAST_NA_FILL: DB 0
+MZ25_TEXT_SCROLL_UP40_FAST_NA_W:    DB 0
+MZ25_TEXT_SCROLL_UP40_FAST_NA_ROWS: DB 0
+MZ25_TEXT_SCROLL_UP40_FAST_NA_SAVE: DB 0
+MZ25_TEXT_SCROLL_UP40_FAST_NA_END:
+    #END
+}
+
+// 40x25の指定範囲を下へ1行高速スクロールする。属性は変更しない。
+MZ25_TEXT_SCROLL_DOWN40_FAST_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H, BYTE FILL_C)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    ^A = FILL_C;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   A,(_A)
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_NA_FILL),A
+    LD   BC,(_BC)
+    LD   A,B
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_NA_ROWS),A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SEEK),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SEEK_LOOP:
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SEEK)
+    OR   A
+    JR   Z,MZ25_TEXT_SCROLL_DOWN40_FAST_NA_ROW
+    LD   DE,40
+    ADD  HL,DE
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SEEK),A
+    JR   MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SEEK_LOOP
+
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_ROW:
+    PUSH HL
+    PUSH HL
+    LD   DE,-40
+    ADD  HL,DE
+    POP  DE
+    PUSH DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    POP  AF
+
+    SET  4,H
+    PUSH HL
+    LD   DE,-40
+    ADD  HL,DE
+    POP  DE
+    PUSH DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    RES  4,H
+    LD   DE,-40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_DOWN40_FAST_NA_ROW
+
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_FILL)
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_FILL1:
+    LD   (HL),A
+    INC  HL
+    DEC  C
+    JR   NZ,MZ25_TEXT_SCROLL_DOWN40_FAST_NA_FILL1
+    LD   HL,(_HL)
+    LD   DE,3000H
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_W)
+    LD   C,A
+    LD   B,0
+    XOR  A
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_FILL2:
+    LD   (HL),A
+    INC  HL
+    DEC  C
+    JR   NZ,MZ25_TEXT_SCROLL_DOWN40_FAST_NA_FILL2
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_DOWN40_FAST_NA_END
+
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_FILL: DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_W:    DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_ROWS: DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SEEK: DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_SAVE: DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_NA_END:
+    #END
+}
+
+// 40x25の指定範囲を左へ1セル高速ループスクロールする。属性は変更しない。
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   BC,(_BC)
+    LD   A,B
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_ROWS),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_ROW:
+    LD   A,(HL)
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_EDGE1),A
+    PUSH HL
+    SET  4,H
+    LD   A,(HL)
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_EDGE2),A
+    POP  HL
+    PUSH HL
+    LD   D,H
+    LD   E,L
+    INC  HL
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDIR
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_EDGE1)
+    LD   (DE),A
+    POP  HL
+    PUSH HL
+    SET  4,H
+    LD   D,H
+    LD   E,L
+    INC  HL
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDIR
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_EDGE2)
+    LD   (DE),A
+    POP  HL
+    LD   DE,40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_ROW
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_END
+
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_EDGE1: DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_EDGE2: DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_W:     DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_ROWS:  DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_SAVE:  DB 0
+MZ25_TEXT_SCROLL_LEFT40_FAST_LOOP_NA_END:
+    #END
+}
+
+// 40x25の指定範囲を右へ1セル高速ループスクロールする。属性は変更しない。
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   BC,(_BC)
+    LD   A,B
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_ROWS),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_ROW:
+    PUSH HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_W)
+    DEC  A
+    LD   E,A
+    LD   D,0
+    ADD  HL,DE
+    LD   A,(HL)
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_EDGE1),A
+    SET  4,H
+    LD   A,(HL)
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_EDGE2),A
+    POP  HL
+    PUSH HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_W)
+    DEC  A
+    LD   E,A
+    LD   D,0
+    ADD  HL,DE
+    LD   D,H
+    LD   E,L
+    DEC  HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDDR
+    POP  HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_EDGE1)
+    LD   (HL),A
+    PUSH HL
+    SET  4,H
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_W)
+    DEC  A
+    LD   E,A
+    LD   D,0
+    ADD  HL,DE
+    LD   D,H
+    LD   E,L
+    DEC  HL
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_W)
+    DEC  A
+    LD   C,A
+    LD   B,0
+    LDDR
+    POP  HL
+    PUSH HL
+    SET  4,H
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_EDGE2)
+    LD   (HL),A
+    POP  HL
+    LD   DE,40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_ROW
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_END
+
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_EDGE1: DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_EDGE2: DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_W:     DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_ROWS:  DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_SAVE:  DB 0
+MZ25_TEXT_SCROLL_RIGHT40_FAST_LOOP_NA_END:
+    #END
+}
+
+
+// 40x25の指定範囲を上へ1行高速ループスクロールする。属性は変更しない。
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   BC,(_BC)
+    LD   A,B
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_ROWS),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+    PUSH HL
+    LD   DE,MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_BUF1
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    PUSH HL
+    SET  4,H
+    LD   DE,MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_BUF2
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_ROW:
+    PUSH HL
+    PUSH HL
+    LD   DE,40
+    ADD  HL,DE
+    POP  DE
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    PUSH HL
+    SET  4,H
+    PUSH HL
+    LD   DE,40
+    ADD  HL,DE
+    POP  DE
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    LD   DE,40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_ROW
+
+    PUSH HL
+    LD   DE,MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_BUF1
+    EX   DE,HL
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    SET  4,H
+    LD   DE,MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_BUF2
+    EX   DE,HL
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_END
+
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_W:    DB 0
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_ROWS: DB 0
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_SAVE: DB 0
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_BUF1: DS 40
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_BUF2: DS 40
+MZ25_TEXT_SCROLL_UP40_FAST_LOOP_NA_END:
+    #END
+}
+
+// 40x25の指定範囲を下へ1行高速ループスクロールする。属性は変更しない。
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NOATTR(BYTE PAGE, BYTE X, BYTE Y, BYTE W, BYTE H)
+VAR WORD POS,SIZE;
+{
+    POS = MZ25_TEXT_OFFSET40(PAGE, X, Y);
+    SIZE = H * 256 + W;
+    ^HL = POS;
+    ^BC = SIZE;
+    #ASM
+    DI
+    LD   A,1
+    OUT  (0B4H),A
+    IN   A,(0B5H)
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SAVE),A
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,38H
+    OUT  (0B5H),A
+
+    LD   BC,(_BC)
+    LD   A,B
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_ROWS),A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SEEK),A
+    LD   A,C
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W),A
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SEEK_LOOP:
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SEEK)
+    OR   A
+    JR   Z,MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SAVE_BOTTOM
+    LD   DE,40
+    ADD  HL,DE
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SEEK),A
+    JR   MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SEEK_LOOP
+
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SAVE_BOTTOM:
+    PUSH HL
+    LD   DE,MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_BUF1
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    PUSH HL
+    SET  4,H
+    LD   DE,MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_BUF2
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_ROW:
+    PUSH HL
+    PUSH HL
+    LD   DE,-40
+    ADD  HL,DE
+    POP  DE
+    PUSH DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    POP  AF
+    SET  4,H
+    PUSH HL
+    LD   DE,-40
+    ADD  HL,DE
+    POP  DE
+    PUSH DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    POP  HL
+    RES  4,H
+    LD   DE,-40
+    ADD  HL,DE
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_ROWS)
+    DEC  A
+    LD   (MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_ROWS),A
+    JR   NZ,MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_ROW
+
+    LD   HL,(_HL)
+    LD   DE,2000H
+    ADD  HL,DE
+    LD   DE,MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_BUF1
+    EX   DE,HL
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+    EX   DE,HL
+    LD   HL,(_HL)
+    LD   DE,3000H
+    ADD  HL,DE
+    LD   DE,MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_BUF2
+    EX   DE,HL
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W)
+    LD   C,A
+    LD   B,0
+    LDIR
+
+    LD   A,1
+    OUT  (0B4H),A
+    LD   A,(MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SAVE)
+    OUT  (0B5H),A
+    EI
+    JR   MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_END
+
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_W:    DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_ROWS: DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SEEK: DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_SAVE: DB 0
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_BUF1: DS 40
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_BUF2: DS 40
+MZ25_TEXT_SCROLL_DOWN40_FAST_LOOP_NA_END:
+    #END
+}
