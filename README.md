@@ -7,7 +7,7 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 ## 構成
 
 - `docs/`
-  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順、`docs/MZ2500-IOCS-FLOAT.md` に MZ-2500 IOCS 浮動小数点調査メモ、`docs/MZ2500-IOCS-GFX.md` に MZ-2500 IOCS グラフィック調査メモ、`docs/MZ2500-VRAM-GFX.md` に MZ-2500 VRAM直接操作と8x8タイルマップのメモを記録しています。
+  自作のサンプル集や開発メモ。`docs/SLANG-compiler-pr-workflow.md` に SLANG-compiler への PR 作業手順、`docs/MZ2500-IOCS-FLOAT.md` に MZ-2500 IOCS 浮動小数点調査メモ、`docs/MZ2500-IOCS-GFX.md` に MZ-2500 IOCS グラフィック調査メモ、`docs/MZ2500-VRAM-GFX.md` に MZ-2500 VRAM直接操作と8x8タイルマップのメモ、`docs/MZ2500-VRAM-TFX-PCG.md` に MZ-2500 TEXT/PCG VRAM直接操作メモを記録しています。
 
 - `examples/`
   SLANG の実用サンプル。機種依存や必要ライブラリがある場合は README やソース内コメントに記載します。
@@ -29,6 +29,9 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 - `lib/MZ25VRAM_GFX.LIB`
   MZ-2500 320x200x16色向けのVRAM直接操作ライブラリです。8x8タイル描画、8ドット/4ドット単位の矩形スクロール/シフト、ページ間VRAM矩形コピーを含みます。
 
+- `lib/MZ25VRAM_TFX.LIB`
+  MZ-2500 40x25テキスト/PCG向けのVRAM直接操作ライブラリです。PCG定義、文字/属性出力、文字コード取得、PCGマップ描画、テキストVRAMスクロールを含みます。
+
 ## examples 配置
 
 - `examples/iocs/`
@@ -46,6 +49,9 @@ SLANG Lab は、8bit パソコン向け言語 SLANG の自作サンプル、実�
 - `examples/graph/`
   MZ-2500 VRAM直接操作ライブラリの動作確認サンプルです。8x8タイル描画、固定タイルマップ、8ドット/4ドット単位のマップ移動、ページ切り替え版MAPSHIFT、矩形スクロール/シフトの確認コードを置いています。
 
+- `examples/pcg/`
+  MZ-2500 TEXT/PCG VRAM直接操作ライブラリの動作確認サンプルです。PCGデータ、テキストページ重ね合わせ、PCGマップスクロール、グラフィックVRAMスプライトとの重ね合わせを確認します。
+
 ## include パスについて
 
 このリポジトリ内のサンプルは、基本的に各 `examples/*/` ディレクトリでビルドする前提で、`../../lib/...` を直接 `#include` しています。
@@ -59,7 +65,8 @@ VSCode で `.LIB` を SLANG として開きたい場合は、ワークスペー�
   "files.associations": {
     "MZ25IOCS_*.LIB": "slang",
     "FIXEDPOINT.LIB": "slang",
-    "MZ25VRAM_GFX.LIB": "slang"
+    "MZ25VRAM_GFX.LIB": "slang",
+    "MZ25VRAM_TFX.LIB": "slang"
   }
 }
 ```
